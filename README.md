@@ -8,11 +8,13 @@ VidLab turns the video files on your phone or tablet into a rich, organized medi
 
 ## Screenshots
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/8b745edf-ee99-49b6-a981-c5ec057b1c98" width="240" alt="VidLab Catalog" />
-  <img src="https://github.com/user-attachments/assets/9f99b494-a787-4b77-8eeb-2152b9e4307a" width="240" alt="VidLab Media Details" />
-  <img src="https://github.com/user-attachments/assets/c756710f-4ebd-420c-9421-e5110863afb5" width="240" alt="VidLab Player & Sources" />
-</p>
+<table>
+  <tr>
+    <td align="center"><img src="https://github.com/user-attachments/assets/8b745edf-ee99-49b6-a981-c5ec057b1c98" alt="VidLab Catalog" /></td>
+    <td align="center"><img src="https://github.com/user-attachments/assets/9f99b494-a787-4b77-8eeb-2152b9e4307a" alt="VidLab Media Details" /></td>
+    <td align="center"><img src="https://github.com/user-attachments/assets/c756710f-4ebd-420c-9421-e5110863afb5" alt="VidLab Player & Sources" /></td>
+  </tr>
+</table>
 
 ---
 
