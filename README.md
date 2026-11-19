@@ -49,3 +49,9 @@ VidLab brings a rich, organized home-theater catalog to both your device storage
 - **UI & Architecture**: Kotlin, Jetpack Compose, Material 3, Coil
 - **Playback Engine**: AndroidX Media3 (ExoPlayer) + FFmpeg extension
 - **Cloud & Sync**: Embedded `rclone` (`librclone.so`) loopback WebDAV server, Simkl API
+
+---
+
+## License
+
+VidLab is free software licensed under the **GNU General Public License v3.0 (GPL-3.0)** — see the [LICENSE](LICENSE) file for details.
