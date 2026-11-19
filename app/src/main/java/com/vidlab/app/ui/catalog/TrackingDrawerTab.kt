@@ -1,5 +1,5 @@
-import androidx.compose.ui.text.style.TextOverflow
 package com.vidlab.app.ui.catalog
+import androidx.compose.ui.text.style.TextOverflow
 
 import android.content.Intent
 import android.net.Uri
