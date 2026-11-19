@@ -1,6 +1,6 @@
 # VidLab
 
-**A modern, Netflix-style local & cloud video player for Android—with built-in WebDAV, embedded Rclone, automatic metadata, and Simkl sync.**
+**A video player and media library manager for Android—with built-in WebDAV, embedded Rclone, automatic metadata, and multi-tracker sync.**
 
 VidLab brings a rich, organized home-theater catalog to both your device storage and your remote servers. Use it right out of the box as a sleek local media player (like Nova Video Player), or connect your WebDAV shares and `rclone.conf` remotes to stream, browse, and download your entire cloud library without needing a separate server like Plex or Jellyfin.
 
