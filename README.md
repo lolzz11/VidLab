@@ -6,6 +6,16 @@ VidLab turns the video files on your phone or tablet into a rich, organized medi
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/8b745edf-ee99-49b6-a981-c5ec057b1c98" width="240" alt="VidLab Catalog" />
+  <img src="https://github.com/user-attachments/assets/9f99b494-a787-4b77-8eeb-2152b9e4307a" width="240" alt="VidLab Media Details" />
+  <img src="https://github.com/user-attachments/assets/c756710f-4ebd-420c-9421-e5110863afb5" width="240" alt="VidLab Player & Sources" />
+</p>
+
+---
+
 ## Why VidLab?
 
 Most mobile video players just give you a plain list of folders and filenames. VidLab organizes your collection into a proper home theater catalog right out of the box—no server setup or configuration required.
@@ -51,9 +61,3 @@ Once you are comfortable with VidLab as your daily local player, you can optiona
 - **UI & Architecture**: Kotlin, Jetpack Compose, Material 3, Coil
 - **Playback Engine**: AndroidX Media3 (ExoPlayer) + FFmpeg extension
 - **Remote & Sync**: Embedded `rclone` loopback WebDAV bridge, Simkl API
-
-https://github.com/user-attachments/assets/8b745edf-ee99-49b6-a981-c5ec057b1c98
-
-https://github.com/user-attachments/assets/9f99b494-a787-4b77-8eeb-2152b9e4307a
-
-https://github.com/user-attachments/assets/c756710f-4ebd-420c-9421-e5110863afb5
