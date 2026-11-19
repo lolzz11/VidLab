@@ -54,3 +54,9 @@ VidLab organizes your local videos and remote cloud/WebDAV libraries into a clea
 ## License
 
 VidLab is free software licensed under the **GNU General Public License v3.0 (GPL-3.0)** — see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgements & Disclaimers
+- VidLab uses Trakt but is not endorsed or certified by Trakt.
+- Metadata and artwork powered by TMDB, AniSkip, and TheIntroDB.
