@@ -175,6 +175,8 @@ fun MediaDetailScreen(
         } else {
             if (primaryProgress != null && !primaryProgress.watched && primaryProgress.positionMs > 3000L) {
                 "Resume Movie"
+            } else if (primaryProgress?.watched == true) {
+                "Watch Again"
             } else {
                 "Play Movie"
             }
@@ -358,9 +360,10 @@ fun MediaDetailScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             if (metadata?.rating != null && metadata.rating > 0.0) {
                                 MetaBadge(text = "★ ${String.format("%.1f", metadata.rating)}")
@@ -368,26 +371,57 @@ fun MediaDetailScreen(
                             if (!item.releaseYear.isNullOrBlank()) {
                                 MetaBadge(text = item.releaseYear!!)
                             }
-                            if (item.isSeries) {
-                                MetaBadge(text = "${seasons.size} Season${if (seasons.size > 1) "s" else ""} • $watchedCountState/${item.totalEpisodesCount} Watched")
-                            } else {
-                                val sizeGb = String.format("%.2f GB", item.primaryFile.size / 1024.0 / 1024.0 / 1024.0)
-                                MetaBadge(text = "Movie • $sizeGb")
+                            val isFullyWatched = if (item.isSeries) {
+                            item.totalEpisodesCount > 0 && watchedCountState >= item.totalEpisodesCount
+                        } else {
+                            primaryProgress?.watched == true
+                        }
+                        if (isFullyWatched) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF14532D).copy(alpha = 0.92f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22C55E).copy(alpha = 0.55f))
+                            ) {
+                                Text(
+                                    text = "✓ Watched",
+                                    color = Color(0xFF86EFAC),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
                             }
-                            val qualityTags = remember(primaryTargetFile.name, primaryTargetFile.path, item.primaryFile.path) {
-                                val n = "${primaryTargetFile.name} ${primaryTargetFile.path} ${item.primaryFile.path}"
-                                buildList {
-                                    when {
-                                        Regex("""(?i)(?<!\d)(2160p?|4k|uhd)(?!\d)""").containsMatchIn(n) -> add("4K")
-                                        Regex("""(?i)(?<!\d)1080p?(?!\d)""").containsMatchIn(n) -> add("1080p")
-                                        Regex("""(?i)(?<!\d)720p?(?!\d)""").containsMatchIn(n) -> add("720p")
-                                        Regex("""(?i)(?<!\d)480p?(?!\d)""").containsMatchIn(n) -> add("480p")
-                                    }
-                                    if (Regex("""(?i)(?<![a-z0-9])(hdr10\+?|hdr|dolby[\s._-]?vision|dv)(?![a-z0-9])""").containsMatchIn(n)) add("HDR")
-                                    if (Regex("""(?i)(?<![a-z0-9])(10[\s._-]?bit|hi10p)(?![a-z0-9])""").containsMatchIn(n)) add("10-bit")
+                        }
+                        if (item.isSeries) {
+                            MetaBadge(text = "${seasons.size} Season${if (seasons.size > 1) "s" else ""} • $watchedCountState/${item.totalEpisodesCount} Watched")
+                        } else {
+                            val sizeGb = String.format("%.2f GB", item.primaryFile.size / 1024.0 / 1024.0 / 1024.0)
+                            MetaBadge(text = "Movie • $sizeGb")
+                        }
+                        val qualityTags = remember(primaryTargetFile.name, primaryTargetFile.path, item.primaryFile.path, allEpisodes) {
+                            val firstEpName = allEpisodes.firstOrNull()?.file?.name ?: ""
+                            val n = "${primaryTargetFile.name} ${primaryTargetFile.path} ${item.primaryFile.path} $firstEpName"
+                            buildList {
+                                when {
+                                    Regex("""(?i)(?<!\d)(2160p?|4k|uhd)(?!\d)""").containsMatchIn(n) -> add("4K")
+                                    Regex("""(?i)(?<!\d)1080p?(?!\d)""").containsMatchIn(n) -> add("1080p")
+                                    Regex("""(?i)(?<!\d)720p?(?!\d)""").containsMatchIn(n) -> add("720p")
+                                    Regex("""(?i)(?<!\d)480p?(?!\d)""").containsMatchIn(n) -> add("480p")
                                 }
+                                when {
+                                    Regex("""(?i)(?<![a-z0-9])(hevc|x265|h\.?265)(?![a-z0-9])""").containsMatchIn(n) -> add("HEVC")
+                                    Regex("""(?i)(?<![a-z0-9])av1(?![a-z0-9])""").containsMatchIn(n) -> add("AV1")
+                                    Regex("""(?i)(?<![a-z0-9])(avc|x264|h\.?264)(?![a-z0-9])""").containsMatchIn(n) -> add("AVC")
+                                }
+                                when {
+                                    Regex("""(?i)(?<![a-z0-9])(remux)(?![a-z0-9])""").containsMatchIn(n) -> add("REMUX")
+                                    Regex("""(?i)(?<![a-z0-9])(blu[\s._-]?ray|bdrip|brrip)(?![a-z0-9])""").containsMatchIn(n) -> add("BluRay")
+                                    Regex("""(?i)(?<![a-z0-9])(web[\s._-]?dl|webrip)(?![a-z0-9])""").containsMatchIn(n) -> add("WEB-DL")
+                                }
+                                if (Regex("""(?i)(?<![a-z0-9])(hdr10\+?|hdr|dolby[\s._-]?vision|dv)(?![a-z0-9])""").containsMatchIn(n)) add("HDR")
+                                if (Regex("""(?i)(?<![a-z0-9])(10[\s._-]?bit|hi10p)(?![a-z0-9])""").containsMatchIn(n)) add("10-bit")
                             }
-                            qualityTags.forEach { tag -> MetaBadge(text = tag) }
+                        }
+                        qualityTags.forEach { tag -> MetaBadge(text = tag) }
                         }
 
                         if (!metadata?.genres.isNullOrEmpty()) {

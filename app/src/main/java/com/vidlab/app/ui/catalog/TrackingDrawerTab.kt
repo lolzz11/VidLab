@@ -47,6 +47,8 @@ fun UnifiedTrackingCard(onSimklToggle: (Boolean) -> Unit) {
     var traktCid by remember { mutableStateOf(traktManager.clientId) }
     var traktSec by remember { mutableStateOf(traktManager.clientSecret) }
     var showTraktSetup by remember { mutableStateOf(false) }
+    var traktPin by remember { mutableStateOf<TraktDeviceSession?>(null) }
+    var traktBusy by remember { mutableStateOf(false) }
 
     val aniManager = remember { AniListManager(context) }
     var aniSignedIn by remember { mutableStateOf(aniManager.isSignedIn) }
@@ -56,6 +58,50 @@ fun UnifiedTrackingCard(onSimklToggle: (Boolean) -> Unit) {
     var aniToken by remember { mutableStateOf("") }
     var showAniSetup by remember { mutableStateOf(false) }
     var aniVerifying by remember { mutableStateOf(false) }
+
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                aniSignedIn = aniManager.isSignedIn
+                aniUser = aniManager.username ?: "AniList Member"
+                traktSignedIn = traktManager.isSignedIn
+                traktUser = traktManager.username ?: "Trakt Member"
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
+    LaunchedEffect(traktPin) {
+        val active = traktPin ?: return@LaunchedEffect
+        var waitSec = active.interval.coerceAtLeast(5).toLong()
+        val deadline = System.currentTimeMillis() + (active.expiresIn.coerceAtLeast(120) * 1000L)
+        while (traktPin != null && System.currentTimeMillis() < deadline) {
+            delay(waitSec * 1000L)
+            when (val res = traktManager.pollDeviceToken(active)) {
+                is TraktPollState.Authorized -> {
+                    traktSignedIn = true
+                    traktUser = traktManager.username ?: "Trakt Member"
+                    traktPin = null
+                    showTraktSetup = false
+                    Toast.makeText(context, "Connected to Trakt as $traktUser", Toast.LENGTH_SHORT).show()
+                    break
+                }
+                is TraktPollState.Pending -> if (res.slowDown) waitSec += 5L
+                is TraktPollState.Expired -> {
+                    traktPin = null
+                    Toast.makeText(context, res.message, Toast.LENGTH_SHORT).show()
+                    break
+                }
+                is TraktPollState.Error -> {
+                    traktPin = null
+                    Toast.makeText(context, res.message, Toast.LENGTH_SHORT).show()
+                    break
+                }
+            }
+        }
+    }
 
     LaunchedEffect(simklPin) {
         val active = simklPin ?: return@LaunchedEffect
@@ -156,19 +202,43 @@ fun UnifiedTrackingCard(onSimklToggle: (Boolean) -> Unit) {
                 if (!traktSignedIn) {
                     Button(
                         onClick = {
-                            if (traktManager.clientId.isBlank()) showTraktSetup = !showTraktSetup
-                            else runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(traktManager.buildAuthorizeUrl()))) }
+                            if (traktBusy) return@Button
+                            traktBusy = true
+                            scope.launch {
+                                val res = traktManager.requestDeviceCode()
+                                traktBusy = false
+                                res.onSuccess { session ->
+                                    traktPin = session
+                                    runCatching {
+                                        val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                        cm.setPrimaryClip(android.content.ClipData.newPlainText("Trakt Code", session.userCode))
+                                        Toast.makeText(context, "Code ${session.userCode} copied — paste on Trakt", Toast.LENGTH_LONG).show()
+                                    }
+                                    runCatching {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(session.verificationUrl)))
+                                    }
+                                }.onFailure {
+                                    Toast.makeText(context, it.message ?: "Failed to start Trakt login", Toast.LENGTH_SHORT).show()
+                                }
+                            }
                         },
+                        enabled = !traktBusy,
                         colors = ButtonDefaults.buttonColors(containerColor = AccentViolet),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                         modifier = Modifier.height(32.dp)
-                    ) { Text("Connect", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    ) { Text(if (traktBusy) "..." else "Connect", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Switch(checked = traktScrobble, onCheckedChange = { traktScrobble = it; traktManager.scrobbleEnabled = it }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF3B6CB7)))
                         Text("Sign Out", color = Color(0xFF94A3B8), fontSize = 11.sp, modifier = Modifier.clickable { traktManager.signOut(); traktSignedIn = false })
                     }
+                }
+            }
+            if (traktPin != null && !traktSignedIn) {
+                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(BorderPurple).padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Code: ${traktPin!!.userCode}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                    Text("Cancel", color = Color(0xFF94A3B8), fontSize = 11.sp, modifier = Modifier.clickable { traktPin = null })
                 }
             }
             if (showTraktSetup && !traktSignedIn) {
@@ -198,7 +268,13 @@ fun UnifiedTrackingCard(onSimklToggle: (Boolean) -> Unit) {
                 }
                 if (!aniSignedIn) {
                     Button(
-                        onClick = { showAniSetup = !showAniSetup },
+                        onClick = {
+                            runCatching {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(aniManager.buildAuthorizeUrl())))
+                            }.onFailure {
+                                showAniSetup = !showAniSetup
+                            }
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentViolet),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),

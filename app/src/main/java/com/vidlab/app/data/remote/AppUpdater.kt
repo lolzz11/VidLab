@@ -22,7 +22,7 @@ data class AppReleaseInfo(
 )
 
 object AppUpdater {
-    private const val LATEST_RELEASE_API = "https://api.github.com/repos/muffinancestor/VidLab/releases/latest"
+    private const val LATEST_RELEASE_API = "https://api.github.com/repos/lolzz11/VidLab/releases/latest"
 
     fun getCurrentVersionName(context: Context): String {
         return runCatching {
@@ -52,7 +52,7 @@ object AppUpdater {
             val json = if (code in 200..299) {
                 JSONObject(raw)
             } else {
-                val (listCode, listRaw) = fetchGitHub("https://api.github.com/repos/muffinancestor/VidLab/releases?per_page=5")
+                val (listCode, listRaw) = fetchGitHub("https://api.github.com/repos/lolzz11/VidLab/releases?per_page=5")
                 if (listCode !in 200..299) {
                     throw IllegalStateException("No published GitHub release found (HTTP $listCode)")
                 }

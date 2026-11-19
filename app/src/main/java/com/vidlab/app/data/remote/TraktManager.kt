@@ -23,6 +23,8 @@ sealed class TraktPollState {
     data class Error(val message: String) : TraktPollState()
 }
 
+private const val DEFAULT_CLIENT_ID = "0WV22lRK_15BB16rd8am2upGjvM2hXSc4yk-rA8bA1o"
+
 class TraktManager(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("vidlab_trakt_prefs", Context.MODE_PRIVATE)
@@ -58,7 +60,7 @@ class TraktManager(context: Context) {
     init { restoreFromBackupIfNeeded() }
 
     var clientId: String
-        get() = prefs.getString("trakt_client_id", "")?.trim().orEmpty()
+        get() = prefs.getString("trakt_client_id", "")?.trim().orEmpty().ifBlank { DEFAULT_CLIENT_ID }
         set(value) { prefs.edit().putString("trakt_client_id", value.trim()).commit(); syncBackup() }
 
     var clientSecret: String

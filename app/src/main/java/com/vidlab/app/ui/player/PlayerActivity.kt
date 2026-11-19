@@ -535,7 +535,15 @@ private fun ModernPlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                playerError = "${error.errorCodeName}:${error.message}"
+                val dur = player.duration.coerceAtLeast(duration)
+                val pos = player.currentPosition.coerceAtLeast(currentPos)
+                val isNearEof = dur > 0L && (pos >= (dur * 0.95).toLong() || (dur - pos) <= 15_000L)
+                if (isNearEof) {
+                    if (activeFilePath.isNotBlank()) WatchProgressStore(context).saveProgress(activeFilePath, dur, dur)
+                    onBack()
+                } else {
+                    playerError = "${error.errorCodeName}:${error.message}"
+                }
             }
         }
         player.addListener(listener)

@@ -15,12 +15,13 @@ class AniListManager(context: Context) {
     companion object {
         private const val GRAPHQL_URL = "https://graphql.anilist.co"
         private const val USER_AGENT = "VidLab/2.5 (Android)"
+        const val DEFAULT_CLIENT_ID = "57487"
     }
 
     init { restoreFromBackupIfNeeded() }
 
     var clientId: String
-        get() = prefs.getString("anilist_client_id", "")?.trim().orEmpty()
+        get() = prefs.getString("anilist_client_id", "")?.trim().orEmpty().ifBlank { DEFAULT_CLIENT_ID }
         set(value) { prefs.edit().putString("anilist_client_id", value.trim()).commit(); syncBackup() }
 
     var accessToken: String?
