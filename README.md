@@ -51,3 +51,9 @@ Once you are comfortable with VidLab as your daily local player, you can optiona
 - **UI & Architecture**: Kotlin, Jetpack Compose, Material 3, Coil
 - **Playback Engine**: AndroidX Media3 (ExoPlayer) + FFmpeg extension
 - **Remote & Sync**: Embedded `rclone` loopback WebDAV bridge, Simkl API
+
+https://github.com/user-attachments/assets/8b745edf-ee99-49b6-a981-c5ec057b1c98
+
+https://github.com/user-attachments/assets/9f99b494-a787-4b77-8eeb-2152b9e4307a
+
+https://github.com/user-attachments/assets/c756710f-4ebd-420c-9421-e5110863afb5
