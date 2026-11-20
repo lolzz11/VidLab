@@ -225,10 +225,10 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                 "/VidLab/$chosenCategory/$movieFolder/$newFileName"
             }
 
-            val moveRes = if (RcloneEngine.isRcloneModeEnabled(app)) {
-                RcloneEngine.moveFile(app, qItem.file.path, destPath)
-            } else {
-                repository.webDavClient.moveFile(qItem.file.path, destPath)
+            val moveRes = when {
+                RcloneEngine.isLocalStorageModeEnabled(app) -> RcloneEngine.moveLocalFile(app, qItem.file.path, destPath)
+                RcloneEngine.isRcloneModeEnabled(app) -> RcloneEngine.moveFile(app, qItem.file.path, destPath)
+                else -> repository.webDavClient.moveFile(qItem.file.path, destPath)
             }
 
             if (moveRes.isSuccess) {
@@ -423,10 +423,10 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                                 "/VidLab/$finalCategory/$movieFolder/$cleanOfficialTitle$yearSuffix.$ext"
                             }
 
-                            val moveResult = if (RcloneEngine.isRcloneModeEnabled(app)) {
-                                RcloneEngine.moveFile(app, file.path, destPath)
-                            } else {
-                                repository.webDavClient.moveFile(file.path, destPath)
+                            val moveResult = when {
+                                RcloneEngine.isLocalStorageModeEnabled(app) -> RcloneEngine.moveLocalFile(app, file.path, destPath)
+                                RcloneEngine.isRcloneModeEnabled(app) -> RcloneEngine.moveFile(app, file.path, destPath)
+                                else -> repository.webDavClient.moveFile(file.path, destPath)
                             }
 
                             val logLine = if (moveResult.isSuccess) {

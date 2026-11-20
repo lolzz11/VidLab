@@ -80,9 +80,14 @@ fun AutoRenameScreen(
                     fontWeight = FontWeight.Bold
                 )
                 val ctx = androidx.compose.ui.platform.LocalContext.current
+                val isLocal = com.vidlab.app.data.remote.RcloneEngine.isLocalStorageModeEnabled(ctx)
                 val isRclone = com.vidlab.app.data.remote.RcloneEngine.isRcloneModeEnabled(ctx)
                 Text(
-                    text = if (isRclone) "Rclone -> /VidLab Vault" else "WebDAV -> /VidLab Vault",
+                    text = when {
+                        isLocal -> "Local Storage -> /VidLab Vault"
+                        isRclone -> "Rclone -> /VidLab Vault"
+                        else -> "WebDAV -> /VidLab Vault"
+                    },
                     color = TextSecondary,
                     fontSize = 12.sp
                 )

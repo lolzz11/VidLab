@@ -149,6 +149,42 @@ object RcloneEngine {
             .apply()
     }
 
+    suspend fun moveLocalFile(context: Context, sourcePath: String, destPath: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val extRoot = android.os.Environment.getExternalStorageDirectory()
+            val vidLabRoot = File(extRoot, "VidLab")
+            val srcNorm = "/" + sourcePath.trim('/')
+            val dstNorm = "/" + destPath.trim('/')
+            val srcFile = when {
+                sourcePath.startsWith(extRoot.absolutePath) -> File(sourcePath)
+                srcNorm.equals("/VidLab", ignoreCase = true) -> vidLabRoot
+                srcNorm.startsWith("/VidLab/", ignoreCase = true) -> File(vidLabRoot, srcNorm.substring("/VidLab/".length))
+                else -> File(extRoot, srcNorm.trimStart('/'))
+            }
+            val dstFile = when {
+                dstNorm.startsWith("/VidLab/", ignoreCase = true) -> File(vidLabRoot, dstNorm.substring("/VidLab/".length))
+                else -> File(extRoot, dstNorm.trimStart('/'))
+            }
+            if (!srcFile.exists()) throw java.io.FileNotFoundException("Source file not found: ${srcFile.absolutePath}")
+            if (srcFile.canonicalPath == dstFile.canonicalPath) return@runCatching Unit
+            dstFile.parentFile?.mkdirs()
+            val moved = srcFile.renameTo(dstFile) || run {
+                srcFile.copyTo(dstFile, overwrite = true)
+                if (dstFile.exists() && dstFile.length() == srcFile.length()) {
+                    srcFile.delete()
+                    true
+                } else false
+            }
+            if (!moved) throw java.io.IOException("Failed to move ${srcFile.name} to ${dstFile.absolutePath}")
+            android.media.MediaScannerConnection.scanFile(
+                context,
+                arrayOf(srcFile.absolutePath, dstFile.absolutePath),
+                null,
+                null
+            )
+        }
+    }
+
     suspend fun pruneEmptyDirectories(context: Context, dirPaths: Collection<String>) = withContext(Dispatchers.IO) {
         if (dirPaths.isEmpty()) return@withContext
         val sortedDirs = dirPaths
