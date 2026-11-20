@@ -57,6 +57,13 @@ VidLab is free software licensed under the **GNU General Public License v3.0 (GP
 
 ---
 
-## Acknowledgements & Disclaimers
-- VidLab uses Trakt but is not endorsed or certified by Trakt.
-- Metadata and artwork powered by TMDB, AniSkip, and TheIntroDB.
+## Disclaimers & Third-Party Attributions
+
+### Content Disclaimer (Bring Your Own Media)
+VidLab is strictly a **local media player and cloud storage client**. VidLab does **not** host, provide, index, scrape, or distribute any movies, TV shows, anime, or copyrighted media files. Users are solely responsible for ensuring they have the legal right to access and stream any content stored on their devices, WebDAV servers, or Rclone remotes.
+
+### API & Open-Source Notices
+- **TMDB:** This product uses the TMDB API but is not endorsed or certified by TMDB.
+- **Trakt:** VidLab uses Trakt but is not endorsed or certified by Trakt.
+- **Metadata & Sync:** Additional metadata, intro markers, and watch-history sync powered by **Simkl**, **AniList**, **AniSkip**, and **TheIntroDB**.
+- **FFmpeg & Rclone:** VidLab uses libraries from the **FFmpeg** project under the **LGPLv2.1+** and embeds **Rclone** under the **MIT License**. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full license details.

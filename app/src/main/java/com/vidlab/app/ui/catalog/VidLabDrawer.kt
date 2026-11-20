@@ -997,6 +997,33 @@ fun VidLabDrawerContent(
                                 }
                             }
                         }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("LEGAL & LICENSES", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Surface(
+                            color = SurfaceDark,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(0.8.dp, BorderPurple),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    "VidLab is a bring-your-own-media player and cloud client. It does not host, index, or distribute any media content.",
+                                    color = Color(0xFFCBD5E1),
+                                    fontSize = 11.sp
+                                )
+                                HorizontalDivider(color = BorderPurple.copy(alpha = 0.6f))
+                                Text(
+                                    "Metadata & Sync: This product uses the TMDB API and Trakt, but is not endorsed or certified by TMDB or Trakt. Additional metadata and sync powered by Simkl, AniList, AniSkip, and TheIntroDB.",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 10.sp
+                                )
+                                Text(
+                                    "Open-Source Licenses: VidLab is licensed under GPL-3.0. Uses FFmpeg (LGPLv2.1+), Rclone (MIT), and AndroidX Media3 (Apache 2.0).",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
                     }
                     3 -> {
                         val failedCount = downloadTasks.count { it.status == DownloadStatus.FAILED || it.status == DownloadStatus.CANCELLED }

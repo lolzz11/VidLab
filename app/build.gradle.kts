@@ -17,8 +17,8 @@ android {
         applicationId = "com.vidlab.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 18
-        versionName = "1.3.4"
+        versionCode = 19
+        versionName = "1.3.5"
     }
 
     signingConfigs {
