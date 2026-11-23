@@ -13,7 +13,7 @@ data class ParsedMediaInfo(
 
 object FilenameSanitizer {
     private val bracketsPattern = Regex("""\[[^\]]*\]|\([^\)]*\)""", RegexOption.IGNORE_CASE)
-    
+
     private val noisePattern = Regex(
         """(?i)\b(1080p|720p|480p|2160p|4k|uhd|hdr|imax|web-?dl|webrip|bluray|bdrip|brrip|dvdrip|hdtv|x264|x265|hevc|avc|10bit|8bit|aac|ac3|eac3|dts(?:-hd)?|truehd|atmos|ddp?\s*5\.?1|dd\s*5\.?1|5\.1|7\.1|2\.0|multi|repack|proper|amzn|nf|hbo|cr|jbent|eztv|rarbg|psa|bone|hin(?:di)?|tam(?:il)?|tel(?:ugu)?|kan(?:nada)?|eng(?:lish)?|jap(?:anese)?|org|line|esubs?|subs?|4khdhub|absenth?|absinth|hdhub4u|moviesdrives(?:\.bid)?|bid|tv|com|nano-lumix|lumix|yt|opus|tv\d{4}|movie\d{4})\b"""
     )
@@ -47,18 +47,20 @@ object FilenameSanitizer {
             }
         }
 
-        // Detect anime-style "- 01" or "[01]" episode numbers before stripping brackets
+        // Detect anime-style "- 01" or "[01]" episode numbers before stripping brackets/hyphens
+        val preStripText = text
         val animeDashOrBracketEp = Regex(
             """(?:\s-\s|\[\s*)0*(\d{1,3})(?:\s*v\d+)?(?=\s*(?:\]|\[|\(|1080p|720p|480p|2160p|web|bluray|bdrip|x264|x265|hevc|$))""",
             RegexOption.IGNORE_CASE
-        ).find(text)
+        ).find(preStripText)
         val standaloneEpBeforeStrip = Regex(
             """(?i)\b(?:ep(?:isode)?\.?\s*|e)0*(\d{1,3})\b"""
-        ).find(text)
+        ).find(preStripText)
 
-        // Strip bracket contents first
+        // Strip bracket contents, known noise, and trailing scene release groups (-GROUP)
         text = bracketsPattern.replace(text, " ")
         text = noisePattern.replace(text, " ")
+        text = text.replace(Regex("""-[A-Za-z0-9]{2,15}$"""), " ")
         text = text.replace(Regex("""[._\-]"""), " ")
 
         var season = 1
@@ -67,6 +69,9 @@ object FilenameSanitizer {
         var isAbsolute = false
 
         if (forceMovie) {
+            if (epMatch != null) {
+                text = text.substring(0, epMatch.range.first.coerceAtMost(text.length))
+            }
             text = text.replace(Regex("""(?i)\b(?:s\d{1,2}e\d{1,3}|\d{1,2}x\d{1,3}|s\d{1,2})\b"""), " ")
             if (year != null) text = text.replace(year, " ")
             text = noisePattern.replace(text, " ")
@@ -95,7 +100,7 @@ object FilenameSanitizer {
                 }
                 episode = epVal
             }
-            text = text.substring(0, epMatch.range.first)
+            text = text.substring(0, epMatch.range.first.coerceAtMost(text.length))
         } else {
             val sMatch = standaloneSeasonPattern.find(text)
             if (sMatch != null) {
@@ -110,13 +115,15 @@ object FilenameSanitizer {
             } else if (standaloneEpBeforeStrip != null) {
                 isSeries = true
                 episode = standaloneEpBeforeStrip.groupValues[1].toIntOrNull()
-                val idx = text.indexOf(standaloneEpBeforeStrip.value, ignoreCase = true)
-                if (idx > 0) text = text.substring(0, idx)
+                val cutIdx = standaloneEpBeforeStrip.range.first.coerceAtMost(text.length)
+                if (cutIdx > 0) text = text.substring(0, cutIdx)
             } else if (animeDashOrBracketEp != null) {
                 isSeries = true
                 episode = animeDashOrBracketEp.groupValues[1].toIntOrNull()
-                val idx = text.indexOf(animeDashOrBracketEp.value, ignoreCase = true)
-                if (idx > 0) text = text.substring(0, idx)
+                val prefix = preStripText.substring(0, animeDashOrBracketEp.range.first)
+                val cleanedPrefix = noisePattern.replace(bracketsPattern.replace(prefix, " "), " ")
+                    .replace(Regex("""[._\-]"""), " ")
+                if (cleanedPrefix.isNotBlank()) text = cleanedPrefix
             } else {
                 val explicitEpMatch = Regex("(?i)\\b(?:ep|episode|e)\\s*0*(\\d{1,3})\\b").find(text)
                 if (explicitEpMatch != null) {
