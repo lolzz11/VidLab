@@ -325,9 +325,9 @@ fun StartupGuideDialog(
                         letterSpacing = 1.sp
                     )
                     listOf(
+                        Triple("local", "Local Storage Mode", "Scan offline movies & shows on your phone or inside /storage/emulated/0/VidLab."),
                         Triple("rclone", "Rclone Mode (Cloud Vault)", "Import your rclone.conf in the left drawer (Source tab) to stream & auto-organize Google Drive, OneDrive, or WebDAV remotes."),
-                        Triple("webdav", "WebDAV Mode", "Connect directly to any external HTTP/HTTPS WebDAV server URL with optional auth."),
-                        Triple("local", "Local Storage Mode", "Scan offline movies & shows on your phone or inside /storage/emulated/0/VidLab.")
+                        Triple("webdav", "WebDAV Mode", "Connect directly to any external HTTP/HTTPS WebDAV server URL with optional auth.")
                     ).forEach { (modeKey, title, desc) ->
                         val isSel = selectedMode == modeKey
                         Surface(

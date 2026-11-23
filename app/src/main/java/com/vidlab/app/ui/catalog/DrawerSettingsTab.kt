@@ -1,5 +1,7 @@
 package com.vidlab.app.ui.catalog
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -47,6 +49,21 @@ internal fun DrawerSettingsTab(onSimklToggle: (Boolean) -> Unit, onOpenSetupGuid
     var subColorIdx by remember { mutableIntStateOf(playerPrefs.subtitleColorIndex) }
     var subBottomPct by remember { mutableIntStateOf(playerPrefs.subtitleBottomPaddingPct) }
     var subBgBox by remember { mutableStateOf(playerPrefs.subtitleBgBox) }
+
+    DisposableEffect(context) {
+        val prefs = context.getSharedPreferences("vidlab_player_prefs", Context.MODE_PRIVATE)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            when (key) {
+                "cloudflare_dns_enabled" -> cloudflareDns = playerPrefs.cloudflareDnsEnabled
+                "decoder_mode" -> decoderMode = playerPrefs.decoderMode
+                "subtitle_font_size_sp" -> subSize = playerPrefs.subtitleFontSizeSp
+                "subtitle_bottom_padding_pct" -> subBottomPct = playerPrefs.subtitleBottomPaddingPct
+                "subtitle_bg_box" -> subBgBox = playerPrefs.subtitleBgBox
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 
     val installedVersion = remember { AppUpdater.getCurrentVersionName(context) }
     var isCheckingUpdate by remember { mutableStateOf(false) }

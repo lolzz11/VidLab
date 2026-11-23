@@ -49,7 +49,11 @@ object RcloneEngine {
     fun getSourceMode(context: Context): String {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getString(KEY_SOURCE_MODE, null)
-            ?: if (prefs.getBoolean(KEY_USE_RCLONE, true)) "rclone" else "webdav"
+            ?: when {
+                prefs.contains(KEY_USE_RCLONE) -> if (prefs.getBoolean(KEY_USE_RCLONE, false)) "rclone" else "webdav"
+                getConfigFile(context).exists() -> "rclone"
+                else -> "local"
+            }
     }
 
     fun setSourceMode(context: Context, mode: String) {
