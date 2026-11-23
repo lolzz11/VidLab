@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 @Composable
-internal fun DrawerSettingsTab(onSimklToggle: (Boolean) -> Unit) {
+internal fun DrawerSettingsTab(onSimklToggle: (Boolean) -> Unit, onOpenSetupGuide: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val playerPrefs = remember { PlayerPreferences(context) }
@@ -61,6 +61,7 @@ internal fun DrawerSettingsTab(onSimklToggle: (Boolean) -> Unit) {
             DrawerToggleRow("Cloudflare DNS (1.1.1.1)", "Route DNS queries through 1.1.1.1 to bypass ISP blocking.", cloudflareDns) {
                 cloudflareDns = it; playerPrefs.cloudflareDnsEnabled = it
             }
+            OutlinedButton(onClick = onOpenSetupGuide, border = BorderStroke(1.dp, DrawerBorderPurple), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth().height(36.dp)) { Text("Setup & ISP Unblock Guide", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
         }
     }
 

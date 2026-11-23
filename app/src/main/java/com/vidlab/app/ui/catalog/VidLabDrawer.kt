@@ -39,7 +39,8 @@ fun VidLabDrawerContent(
     isOrganizerRunning: Boolean = false,
     organizerStatusLabel: String = "",
     sections: List<MediaFeedSection> = emptyList(),
-    onSelectHistoryItem: (ScrapedMediaItem) -> Unit = {}
+    onSelectHistoryItem: (ScrapedMediaItem) -> Unit = {},
+    onOpenSetupGuide: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var sourceMode by remember { mutableStateOf(RcloneEngine.getSourceMode(context)) }
@@ -109,7 +110,7 @@ fun VidLabDrawerContent(
             Spacer(modifier = Modifier.height(14.dp))
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 when (selectedTab) {
-                    0 -> DrawerSettingsTab(onSimklToggle = onSimklToggle)
+                    0 -> DrawerSettingsTab(onSimklToggle = onSimklToggle, onOpenSetupGuide = onOpenSetupGuide)
                     1 -> DrawerSourceTab(
                         sourceMode = sourceMode,
                         onSourceModeChange = { sourceMode = it },

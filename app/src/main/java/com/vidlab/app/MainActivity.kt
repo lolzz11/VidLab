@@ -77,33 +77,6 @@ class MainActivity : ComponentActivity() {
                 .respectCacheHeaders(false)
                 .build()
         )
-        val permsToRequest = buildList {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                add(android.Manifest.permission.POST_NOTIFICATIONS)
-            }
-            if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.Q) {
-                add(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            }
-        }
-        if (permsToRequest.isNotEmpty()) {
-            val missing = permsToRequest.filter {
-                androidx.core.content.ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED
-            }
-            if (missing.isNotEmpty()) {
-                registerForActivityResult(
-                    androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
-                ) {}.launch(missing.toTypedArray())
-            }
-        }
-
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && !android.os.Environment.isExternalStorageManager()) {
-            runCatching {
-                val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, android.net.Uri.parse("package:$packageName"))
-                startActivity(intent)
-            }.onFailure {
-                runCatching { startActivity(Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
-            }
-        }
         com.vidlab.app.data.remote.DownloadTaskManager.ensureVidLabCategoryFolders(this)
         handleOAuthRedirect(intent)
         if (com.vidlab.app.data.remote.RcloneEngine.getSourceMode(this) == "rclone") {
@@ -162,56 +135,15 @@ class MainActivity : ComponentActivity() {
             }
 
             if (showLaunchModePicker) {
-                val activeMode = remember { com.vidlab.app.data.remote.RcloneEngine.getSourceMode(this@MainActivity) }
-                AlertDialog(
-                    onDismissRequest = { launchModePrefs.edit().putBoolean("source_mode_chosen", true).apply(); showLaunchModePicker = false },
-                    containerColor = Color(0xFF171D29),
-                    title = {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("Choose Source Mode", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                            Text("Select how VidLab should load your library", color = Color(0xFF94A3B8), fontSize = 12.sp)
-                        }
+                StartupGuideDialog(
+                    onModeApplied = {
+                        launchModePrefs.edit().putBoolean("source_mode_chosen", true).apply()
+                        showLaunchModePicker = false
+                        viewModel.loadMediaCenter(force = true)
                     },
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            listOf(
-                                Triple("rclone", "Rclone Mode", "Stream & organize cloud remotes via embedded Rclone"),
-                                Triple("webdav", "WebDAV Mode", "Connect directly to an external WebDAV server URL"),
-                                Triple("local", "Local Storage Mode", "Browse & play offline videos from your VidLab folder")
-                            ).forEach { (modeKey, title, desc) ->
-                                val isCurrent = activeMode == modeKey
-                                Surface(
-                                    onClick = {
-                                        com.vidlab.app.data.remote.RcloneEngine.setSourceMode(this@MainActivity, modeKey)
-                                        if (modeKey == "rclone") {
-                                            com.vidlab.app.data.remote.RcloneEngine.startForegroundServeService(this@MainActivity)
-                                            com.vidlab.app.data.remote.RcloneEngine.restartServeIfNeeded(this@MainActivity)
-                                        } else {
-                                            com.vidlab.app.data.remote.RcloneEngine.stopServer()
-                                        }
-                                        if (modeKey == "local") {
-                                            com.vidlab.app.data.remote.DownloadTaskManager.ensureVidLabCategoryFolders(this@MainActivity)
-                                        }
-                                        launchModePrefs.edit().putBoolean("source_mode_chosen", true).apply(); showLaunchModePicker = false
-                                        viewModel.loadMediaCenter(force = true)
-                                    },
-                                    color = if (isCurrent) Color(0xFF244985) else Color(0xFF10141D),
-                                    shape = RoundedCornerShape(12.dp),
-                                    border = BorderStroke(1.dp, if (isCurrent) Color(0xFF3B6CB7) else Color(0xFF222E46)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                        Text(desc, color = if (isCurrent) Color(0xFFD3E3FD) else Color(0xFF94A3B8), fontSize = 11.sp)
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { launchModePrefs.edit().putBoolean("source_mode_chosen", true).apply(); showLaunchModePicker = false }) {
-                            Text("Continue", color = Color(0xFF3B6CB7), fontWeight = FontWeight.Bold)
-                        }
+                    onDismiss = {
+                        launchModePrefs.edit().putBoolean("source_mode_chosen", true).apply()
+                        showLaunchModePicker = false
                     }
                 )
             }
@@ -258,7 +190,8 @@ class MainActivity : ComponentActivity() {
                         onSelectHistoryItem = { item ->
                             coroutineScope.launch { drawerState.close() }
                             selectedItem = item
-                        }
+                        },
+                        onOpenSetupGuide = { coroutineScope.launch { drawerState.close() }; showLaunchModePicker = true }
                     )
                 }
             ) {
