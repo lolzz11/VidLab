@@ -1,0 +1,9 @@
+{
+  "name": "VidLab Android",
+  "image": "mcr.microsoft.com/devcontainers/java:17",
+  "containerEnv": {
+    "ANDROID_HOME": "/usr/local/android-sdk",
+    "ANDROID_SDK_ROOT": "/usr/local/android-sdk"
+  },
+  "postCreateCommand": "sudo mkdir -p /usr/local/android-sdk/cmdline-tools && sudo chown -R vscode:vscode /usr/local/android-sdk && curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdline-tools.zip && unzip -q /tmp/cmdline-tools.zip -d /usr/local/android-sdk/cmdline-tools && mv /usr/local/android-sdk/cmdline-tools/cmdline-tools /usr/local/android-sdk/cmdline-tools/latest && rm /tmp/cmdline-tools.zip && yes | /usr/local/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses && /usr/local/android-sdk/cmdline-tools/latest/bin/sdkmanager 'platform-tools' 'platforms;android-34' 'build-tools;34.0.0'"
+}
