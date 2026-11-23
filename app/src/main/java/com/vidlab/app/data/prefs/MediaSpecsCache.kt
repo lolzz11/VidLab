@@ -106,34 +106,133 @@ object MediaSpecsCache {
     }
 
     fun probeContainerMetadata(urlOrLocalPath: String): List<String> {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            if (urlOrLocalPath.startsWith("http://") || urlOrLocalPath.startsWith("https://")) {
-                retriever.setDataSource(urlOrLocalPath, emptyMap())
-            } else {
+        if (!urlOrLocalPath.startsWith("http://") && !urlOrLocalPath.startsWith("https://")) {
+            val retriever = MediaMetadataRetriever()
+            return try {
                 retriever.setDataSource(urlOrLocalPath)
-            }
-            val w = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
-            val h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
-            val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE).orEmpty().lowercase()
-            buildList {
-                when {
-                    w >= 3600 || h >= 2000 -> add("4K")
-                    w >= 1800 || h >= 1000 -> add("1080p")
-                    w >= 1200 || h >= 700 -> add("720p")
-                    w > 0 || h > 0 -> add("480p")
+                val w = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                val h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE).orEmpty().lowercase()
+                buildList {
+                    when {
+                        w >= 3600 || h >= 2000 -> add("4K")
+                        w >= 1800 || h >= 1000 -> add("1080p")
+                        w >= 1200 || h >= 700 -> add("720p")
+                        w > 0 || h > 0 -> add("480p")
+                    }
+                    when {
+                        mime.contains("hevc") || mime.contains("h265") -> add("HEVC")
+                        mime.contains("av01") || mime.contains("av1") -> add("AV1")
+                        mime.contains("avc") || mime.contains("h264") -> add("AVC")
+                    }
                 }
-                when {
-                    mime.contains("hevc") || mime.contains("h265") -> add("HEVC")
-                    mime.contains("av01") || mime.contains("av1") -> add("AV1")
-                    mime.contains("avc") || mime.contains("h264") -> add("AVC")
-                }
+            } catch (_: Throwable) {
+                emptyList()
+            } finally {
+                runCatching { retriever.release() }
             }
-        } catch (_: Throwable) {
-            emptyList()
-        } finally {
-            runCatching { retriever.release() }
         }
+
+        return runCatching {
+            val conn = (java.net.URL(urlOrLocalPath).openConnection() as java.net.HttpURLConnection).apply {
+                connectTimeout = 2500
+                readTimeout = 2500
+                setRequestProperty("Range", "bytes=0-65535")
+            }
+            val bytes = conn.inputStream.use { inp ->
+                val buf = java.io.ByteArrayOutputStream()
+                val tmp = ByteArray(8192)
+                var tot = 0
+                while (tot < 65536) {
+                    val r = inp.read(tmp)
+                    if (r <= 0) break
+                    buf.write(tmp, 0, r)
+                    tot += r
+                }
+                buf.toByteArray()
+            }
+            conn.disconnect()
+            parseHeaderBytes(bytes)
+        }.getOrDefault(emptyList())
+    }
+
+    private fun parseHeaderBytes(bytes: ByteArray): List<String> {
+        if (bytes.size < 64) return emptyList()
+        var maxW = 0
+        var maxH = 0
+        val out = mutableListOf<String>()
+
+        // Matroska: only parse inside Tracks element (0x1654AE6B) before first Cluster (0x1F43B675)
+        var tracksIdx = -1
+        for (i in 0 until bytes.size - 4) {
+            if (bytes[i] == 0x16.toByte() && bytes[i + 1] == 0x54.toByte() &&
+                bytes[i + 2] == 0xAE.toByte() && bytes[i + 3] == 0x6B.toByte()
+            ) {
+                tracksIdx = i
+                break
+            }
+        }
+        if (tracksIdx >= 0) {
+            var endIdx = bytes.size - 4
+            for (i in tracksIdx until bytes.size - 4) {
+                if (bytes[i] == 0x1F.toByte() && bytes[i + 1] == 0x43.toByte() &&
+                    bytes[i + 2] == 0xB6.toByte() && bytes[i + 3] == 0x75.toByte()
+                ) {
+                    endIdx = i
+                    break
+                }
+            }
+            for (i in tracksIdx until endIdx) {
+                val b0 = bytes[i].toInt() and 0xFF
+                val b1 = bytes[i + 1].toInt() and 0xFF
+                if (b0 == 0xB0 && (b1 == 0x82 || b1 == 0x81)) {
+                    val v = if (b1 == 0x82) ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF) else (bytes[i + 2].toInt() and 0xFF)
+                    if (v in 320..8192) maxW = maxOf(maxW, v)
+                } else if (b0 == 0xBA && (b1 == 0x82 || b1 == 0x81)) {
+                    val v = if (b1 == 0x82) ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF) else (bytes[i + 2].toInt() and 0xFF)
+                    if (v in 240..4320) maxH = maxOf(maxH, v)
+                }
+            }
+            val headerAscii = String(bytes, tracksIdx, (endIdx - tracksIdx).coerceAtLeast(0), Charsets.ISO_8859_1)
+            when {
+                headerAscii.contains("V_MPEGH/ISO/HEVC") -> out.add("HEVC")
+                headerAscii.contains("V_AV1") -> out.add("AV1")
+                headerAscii.contains("V_MPEG4/ISO/AVC") -> out.add("AVC")
+            }
+        } else {
+            // MP4 / ISO-BMFF header
+            val ascii = String(bytes, Charsets.ISO_8859_1)
+            when {
+                ascii.contains("hvc1") || ascii.contains("hev1") -> out.add("HEVC")
+                ascii.contains("av01") -> out.add("AV1")
+                ascii.contains("avc1") -> out.add("AVC")
+            }
+            for (i in 0 until bytes.size - 100) {
+                if (bytes[i] == 't'.code.toByte() && bytes[i + 1] == 'k'.code.toByte() &&
+                    bytes[i + 2] == 'h'.code.toByte() && bytes[i + 3] == 'd'.code.toByte()
+                ) {
+                    val ver = bytes[i + 4].toInt() and 0xFF
+                    val wOff = if (ver == 1) i + 92 else i + 80
+                    if (wOff + 6 < bytes.size) {
+                        val w = ((bytes[wOff].toInt() and 0xFF) shl 8) or (bytes[wOff + 1].toInt() and 0xFF)
+                        val h = ((bytes[wOff + 4].toInt() and 0xFF) shl 8) or (bytes[wOff + 5].toInt() and 0xFF)
+                        if (w in 320..8192 && h in 240..4320) {
+                            maxW = maxOf(maxW, w)
+                            maxH = maxOf(maxH, h)
+                        }
+                    }
+                }
+            }
+        }
+
+        val res = when {
+            maxW >= 3600 || maxH >= 2000 -> "4K"
+            maxW >= 1800 || maxH >= 1000 -> "1080p"
+            maxW >= 1200 || maxH >= 700 -> "720p"
+            maxW > 0 || maxH > 0 -> "480p"
+            else -> null
+        }
+        return listOfNotNull(res) + out.distinct()
     }
 
     private fun normalizeTags(raw: List<String>): List<String> {

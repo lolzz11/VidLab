@@ -280,14 +280,14 @@ class MediaCatalogRepository(
                 crawled
             }
             allFiles.forEach { com.vidlab.app.data.prefs.MediaSpecsCache.seedFromFilename(context, it.path, it.name) }
-            if (RcloneEngine.isLocalStorageModeEnabled(context) || com.vidlab.app.data.prefs.PlayerPreferences(context).autoProbeMediaSpecs) {
-                probeAllMediaSpecs(allFiles)
-            }
             val scrapedItems = groupAndScrapeMedia(allFiles) { partialItems ->
                 onProgress?.invoke(categorizeItems(partialItems))
             }
             val finalSections = categorizeItems(scrapedItems)
             runCatching { cacheFile.writeText(json.encodeToString(finalSections)) }
+            if (RcloneEngine.isLocalStorageModeEnabled(context) || com.vidlab.app.data.prefs.PlayerPreferences(context).autoProbeMediaSpecs) {
+                probeAllMediaSpecs(allFiles)
+            }
             finalSections
         }
     }
@@ -685,7 +685,7 @@ class MediaCatalogRepository(
                     try {
                         val targetUrl = if (RcloneEngine.isLocalStorageModeEnabled(context)) file.path
                         else runCatching { RcloneEngine.buildStreamUrl(context, file.path) }.getOrNull() ?: return@launch
-                        val tags = com.vidlab.app.data.prefs.MediaSpecsCache.probeContainerMetadata(targetUrl)
+                        val tags = kotlinx.coroutines.withTimeoutOrNull(3500L) { com.vidlab.app.data.prefs.MediaSpecsCache.probeContainerMetadata(targetUrl) }.orEmpty()
                         if (tags.isNotEmpty()) com.vidlab.app.data.prefs.MediaSpecsCache.mergeAndSaveTags(context, file.path, tags)
                     } finally {
                         semaphore.release()

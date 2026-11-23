@@ -81,7 +81,7 @@ internal fun DrawerSettingsTab(onSimklToggle: (Boolean) -> Unit, onOpenSetupGuid
                 cloudflareDns = it; playerPrefs.cloudflareDnsEnabled = it
             }
             HorizontalDivider(color = DrawerBorderPurple.copy(alpha = 0.6f))
-            DrawerToggleRow("Auto-Probe Video Headers", "Read remote headers on scan for 4K/1080p/HEVC badges (Warning: consumes extra mobile data).", autoProbeSpecs) {
+            DrawerToggleRow("Auto-Probe Video Headers", "Inspect remote video headers on scan for 4K/1080p/HEVC badges (uses extra bandwidth & scan time).", autoProbeSpecs) {
                 autoProbeSpecs = it; playerPrefs.autoProbeMediaSpecs = it
             }
             OutlinedButton(onClick = onOpenSetupGuide, border = BorderStroke(1.dp, DrawerBorderPurple), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth().height(36.dp)) { Text("Setup & ISP Unblock Guide", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
