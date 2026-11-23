@@ -677,6 +677,11 @@ class MediaCatalogRepository(
                 .none { it in listOf("4K", "1080p", "720p", "480p") }
         }
         if (uncached.isEmpty()) return@withContext
+        val isRclone = RcloneEngine.isRcloneModeEnabled(context)
+        if (isRclone && !RcloneEngine.ensureServerRunning(context)) return@withContext
+        val authUser = if (isRclone) RcloneEngine.getRcloneServeUsername(context) else RcloneEngine.getWebDavUsername(context)
+        val authPass = if (isRclone) RcloneEngine.getRcloneServePassword(context) else RcloneEngine.getWebDavPassword(context)
+
         val semaphore = kotlinx.coroutines.sync.Semaphore(3)
         kotlinx.coroutines.coroutineScope {
             uncached.forEach { file ->
@@ -685,8 +690,12 @@ class MediaCatalogRepository(
                     try {
                         val targetUrl = if (RcloneEngine.isLocalStorageModeEnabled(context)) file.path
                         else runCatching { RcloneEngine.buildStreamUrl(context, file.path) }.getOrNull() ?: return@launch
-                        val tags = kotlinx.coroutines.withTimeoutOrNull(3500L) { com.vidlab.app.data.prefs.MediaSpecsCache.probeContainerMetadata(targetUrl) }.orEmpty()
-                        if (tags.isNotEmpty()) com.vidlab.app.data.prefs.MediaSpecsCache.mergeAndSaveTags(context, file.path, tags)
+                        val tags = kotlinx.coroutines.withTimeoutOrNull(4500L) {
+                            com.vidlab.app.data.prefs.MediaSpecsCache.probeContainerMetadata(targetUrl, authUser, authPass)
+                        }.orEmpty()
+                        if (tags.isNotEmpty()) {
+                            com.vidlab.app.data.prefs.MediaSpecsCache.mergeAndSaveTags(context, file.path, tags)
+                        }
                     } finally {
                         semaphore.release()
                     }

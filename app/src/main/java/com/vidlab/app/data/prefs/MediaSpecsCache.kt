@@ -105,11 +105,20 @@ object MediaSpecsCache {
         if (detected.isNotEmpty()) mergeAndSaveTags(context, path, detected)
     }
 
-    fun probeContainerMetadata(urlOrLocalPath: String): List<String> {
-        if (!urlOrLocalPath.startsWith("http://") && !urlOrLocalPath.startsWith("https://")) {
+    fun probeContainerMetadata(
+        urlOrLocalPath: String,
+        authUser: String = "",
+        authPass: String = ""
+    ): List<String> {
+        val localFilePath = when {
+            urlOrLocalPath.startsWith("file://") -> runCatching { android.net.Uri.parse(urlOrLocalPath).path }.getOrNull()
+            !urlOrLocalPath.startsWith("http://") && !urlOrLocalPath.startsWith("https://") -> urlOrLocalPath
+            else -> null
+        }
+        if (!localFilePath.isNullOrBlank()) {
             val retriever = MediaMetadataRetriever()
             return try {
-                retriever.setDataSource(urlOrLocalPath)
+                retriever.setDataSource(localFilePath)
                 val w = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
                 val h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
                 val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE).orEmpty().lowercase()
@@ -135,23 +144,42 @@ object MediaSpecsCache {
 
         return runCatching {
             val conn = (java.net.URL(urlOrLocalPath).openConnection() as java.net.HttpURLConnection).apply {
-                connectTimeout = 2500
-                readTimeout = 2500
-                setRequestProperty("Range", "bytes=0-65535")
+                connectTimeout = 3000
+                readTimeout = 3000
+                setRequestProperty("Range", "bytes=0-524287")
+                if (authUser.isNotBlank()) {
+                    val token = android.util.Base64.encodeToString(
+                        "$authUser:$authPass".toByteArray(Charsets.UTF_8),
+                        android.util.Base64.NO_WRAP
+                    )
+                    setRequestProperty("Authorization", "Basic $token")
+                }
             }
             val bytes = conn.inputStream.use { inp ->
                 val buf = java.io.ByteArrayOutputStream()
-                val tmp = ByteArray(8192)
+                val tmp = ByteArray(16384)
                 var tot = 0
-                while (tot < 65536) {
+                while (tot < 524288) {
                     val r = inp.read(tmp)
                     if (r <= 0) break
                     buf.write(tmp, 0, r)
                     tot += r
+                    // Stop early once Matroska Cluster (0x1F43B675) is reached past Tracks
+                    val arr = buf.toByteArray()
+                    var hitCluster = false
+                    for (i in (arr.size - r - 4).coerceAtLeast(32) until arr.size - 4) {
+                        if (arr[i] == 0x1F.toByte() && arr[i + 1] == 0x43.toByte() &&
+                            arr[i + 2] == 0xB6.toByte() && arr[i + 3] == 0x75.toByte()
+                        ) {
+                            hitCluster = true
+                            break
+                        }
+                    }
+                    if (hitCluster) break
                 }
                 buf.toByteArray()
             }
-            conn.disconnect()
+            runCatching { conn.disconnect() }
             parseHeaderBytes(bytes)
         }.getOrDefault(emptyList())
     }
@@ -162,7 +190,6 @@ object MediaSpecsCache {
         var maxH = 0
         val out = mutableListOf<String>()
 
-        // Matroska: only parse inside Tracks element (0x1654AE6B) before first Cluster (0x1F43B675)
         var tracksIdx = -1
         for (i in 0 until bytes.size - 4) {
             if (bytes[i] == 0x16.toByte() && bytes[i + 1] == 0x54.toByte() &&
@@ -200,7 +227,6 @@ object MediaSpecsCache {
                 headerAscii.contains("V_MPEG4/ISO/AVC") -> out.add("AVC")
             }
         } else {
-            // MP4 / ISO-BMFF header
             val ascii = String(bytes, Charsets.ISO_8859_1)
             when {
                 ascii.contains("hvc1") || ascii.contains("hev1") -> out.add("HEVC")

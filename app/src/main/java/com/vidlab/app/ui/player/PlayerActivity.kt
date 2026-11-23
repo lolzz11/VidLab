@@ -532,6 +532,14 @@ private fun ModernPlayerScreen(
                 }
             }
 
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    com.vidlab.app.data.prefs.MediaSpecsCache.recordFromPlaybackTracks(
+                        context, activeFilePath, videoSize.width, videoSize.height, null, null
+                    )
+                }
+            }
+
             override fun onTracksChanged(tracks: Tracks) {
                 refreshTracks(tracks)
                 for (group in tracks.groups) {
