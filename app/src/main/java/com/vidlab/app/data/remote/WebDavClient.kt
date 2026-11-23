@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
 import java.net.URLDecoder
@@ -32,7 +33,7 @@ class WebDavClient(
     private fun cleanBaseUrl(): String = baseUrl.trimEnd('/')
 
     // RFC 3986 path segment escaping: spaces -> %20, literal '+' -> %2B
-    private fun escapeUrlPath(path: String): String {
+    internal fun escapeUrlPath(path: String): String {
         return path.split('/').joinToString("/") { seg ->
             if (seg.isEmpty()) "" else {
                 URLEncoder.encode(seg, "UTF-8")
@@ -42,7 +43,7 @@ class WebDavClient(
     }
 
     // Safe decoding that NEVER turns literal '+' into spaces
-    private fun decodeUrlPath(encodedPath: String): String {
+    internal fun decodeUrlPath(encodedPath: String): String {
         return runCatching {
             URLDecoder.decode(encodedPath.replace("+", "%2B"), "UTF-8")
         }.getOrDefault(encodedPath)
@@ -66,7 +67,7 @@ class WebDavClient(
 
             val reqBuilder = Request.Builder()
                 .url(fullUrl)
-                .method("PROPFIND", RequestBody.create("application/xml".toMediaType(), propfindXml))
+                .method("PROPFIND", propfindXml.toRequestBody("application/xml".toMediaType()))
                 .header("Depth", "1")
             if (username.isNotBlank() || password.isNotBlank()) {
                 reqBuilder.header("Authorization", Credentials.basic(username, password))
@@ -174,7 +175,7 @@ class WebDavClient(
         }
     }
 
-    private fun parseMultiStatus(xml: String, requestedPath: String): List<MediaFile> {
+    internal fun parseMultiStatus(xml: String, requestedPath: String): List<MediaFile> {
         val files = mutableListOf<MediaFile>()
         val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
         val builder = factory.newDocumentBuilder()
