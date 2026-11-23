@@ -1,3 +1,6 @@
+import java.net.HttpURLConnection
+import java.net.URI
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -77,4 +80,51 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.3.1")
     implementation("androidx.media3:media3-ui:1.3.1")
     implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.3.1+1")
+}
+
+tasks.register("downloadLibrclone") {
+    val rcloneLib = file("src/main/jniLibs/arm64-v8a/librclone.so")
+    outputs.file(rcloneLib)
+    onlyIf { !rcloneLib.exists() || rcloneLib.length() < 10_000_000L }
+    doLast {
+        rcloneLib.parentFile.mkdirs()
+        val tmpFile = file("${rcloneLib.absolutePath}.tmp")
+        var currentUrl = "https://github.com/lolzz11/VidLab/releases/download/deps-v1/librclone.so"
+        println("Downloading librclone.so from $currentUrl ...")
+        var redirects = 0
+        while (redirects < 10) {
+            val conn = URI.create(currentUrl).toURL().openConnection() as HttpURLConnection
+            conn.instanceFollowRedirects = false
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 120_000
+            val code = conn.responseCode
+            if (code in 300..399) {
+                currentUrl = conn.getHeaderField("Location")
+                    ?: throw GradleException("Redirect without Location header")
+                conn.disconnect()
+                redirects++
+            } else if (code == 200) {
+                conn.inputStream.use { input ->
+                    tmpFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                conn.disconnect()
+                break
+            } else {
+                conn.disconnect()
+                throw GradleException("Failed to download librclone.so: HTTP $code")
+            }
+        }
+        if (!tmpFile.exists() || tmpFile.length() < 10_000_000L) {
+            tmpFile.delete()
+            throw GradleException("Downloaded librclone.so is missing or too small")
+        }
+        tmpFile.renameTo(rcloneLib)
+        println("Downloaded librclone.so (${rcloneLib.length() / (1024 * 1024)} MB)")
+    }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn("downloadLibrclone")
 }
