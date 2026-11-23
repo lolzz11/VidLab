@@ -268,16 +268,20 @@ class MediaCatalogRepository(
             val allFiles = if (RcloneEngine.isRcloneModeEnabled(context) && RcloneEngine.hasValidConfig(context)) {
                 if (RcloneEngine.isRcloneServeWebDavEnabled(context)) RcloneEngine.startForegroundServeService(context)
                 RcloneEngine.streamEnabledRemotes(context) { partialFiles ->
+                    partialFiles.forEach { com.vidlab.app.data.prefs.MediaSpecsCache.seedFromFilename(context, it.path, it.name) }
                     val quick = buildInstantSkeletonItems(partialFiles, cachedById)
                     if (quick.isNotEmpty()) onProgress?.invoke(categorizeItems(quick))
                 }.getOrThrow()
             } else {
                 val crawled = crawlAllStorageFiles()
-                if (RcloneEngine.isLocalStorageModeEnabled(context)) probeAllMediaSpecs(crawled)
                 if (crawled.isNotEmpty()) {
                     onProgress?.invoke(categorizeItems(buildInstantSkeletonItems(crawled, cachedById)))
                 }
                 crawled
+            }
+            allFiles.forEach { com.vidlab.app.data.prefs.MediaSpecsCache.seedFromFilename(context, it.path, it.name) }
+            if (RcloneEngine.isLocalStorageModeEnabled(context) || com.vidlab.app.data.prefs.PlayerPreferences(context).autoProbeMediaSpecs) {
+                probeAllMediaSpecs(allFiles)
             }
             val scrapedItems = groupAndScrapeMedia(allFiles) { partialItems ->
                 onProgress?.invoke(categorizeItems(partialItems))
@@ -668,65 +672,21 @@ class MediaCatalogRepository(
     }
 
     private suspend fun probeAllMediaSpecs(files: List<MediaFile>) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        val prefs = context.getSharedPreferences("vidlab_media_specs_cache", android.content.Context.MODE_PRIVATE)
-        val uncached = files.filter { prefs.getString(it.path, null).isNullOrBlank() }
+        val uncached = files.filter { file ->
+            com.vidlab.app.data.prefs.MediaSpecsCache.getTags(context, file.path)
+                .none { it in listOf("4K", "1080p", "720p", "480p") }
+        }
         if (uncached.isEmpty()) return@withContext
-        val semaphore = kotlinx.coroutines.sync.Semaphore(8)
+        val semaphore = kotlinx.coroutines.sync.Semaphore(3)
         kotlinx.coroutines.coroutineScope {
             uncached.forEach { file ->
                 launch {
                     semaphore.acquire()
                     try {
-                        val urlStr = runCatching { RcloneEngine.buildStreamUrl(context, file.path) }.getOrNull() ?: return@launch
-                        val tags = runCatching {
-                            val conn = (java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection).apply {
-                                connectTimeout = 3500
-                                readTimeout = 3500
-                                setRequestProperty("Range", "bytes=0-262143")
-                            }
-                            val bytes = conn.inputStream.use { inp ->
-                                val buf = java.io.ByteArrayOutputStream()
-                                val tmp = ByteArray(8192)
-                                var tot = 0
-                                while (tot < 262144) {
-                                    val r = inp.read(tmp)
-                                    if (r <= 0) break
-                                    buf.write(tmp, 0, r)
-                                    tot += r
-                                }
-                                buf.toByteArray()
-                            }
-                            if (bytes.size < 64) return@runCatching emptyList<String>()
-                            val out = mutableListOf<String>()
-                            val ascii = String(bytes, Charsets.ISO_8859_1)
-                            var maxW = 0
-                            var maxH = 0
-                            for (i in 0 until bytes.size - 4) {
-                                val b0 = bytes[i].toInt() and 0xFF
-                                val b1 = bytes[i + 1].toInt() and 0xFF
-                                if (b0 == 0xB0 && (b1 == 0x82 || b1 == 0x81)) {
-                                    val v = if (b1 == 0x82) ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF) else (bytes[i + 2].toInt() and 0xFF)
-                                    if (v in 320..8192) maxW = maxOf(maxW, v)
-                                } else if (b0 == 0xBA && (b1 == 0x82 || b1 == 0x81)) {
-                                    val v = if (b1 == 0x82) ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF) else (bytes[i + 2].toInt() and 0xFF)
-                                    if (v in 240..4320) maxH = maxOf(maxH, v)
-                                }
-                            }
-                            when {
-                                maxW >= 3600 || maxH >= 2000 -> out.add("4K")
-                                maxW >= 1800 || maxH >= 1000 -> out.add("1080p")
-                                maxW >= 1200 || maxH >= 700 -> out.add("720p")
-                            }
-                            when {
-                                ascii.contains("V_MPEGH/ISO/HEVC") || ascii.contains("hvc1") || ascii.contains("hev1") -> out.add("HEVC")
-                                ascii.contains("V_AV1") || ascii.contains("av01") -> out.add("AV1")
-                                ascii.contains("V_MPEG4/ISO/AVC") || ascii.contains("avc1") -> out.add("AVC")
-                            }
-                            out.distinct()
-                        }.getOrDefault(emptyList())
-                        if (tags.isNotEmpty()) {
-                            prefs.edit().putString(file.path, tags.joinToString("|")).apply()
-                        }
+                        val targetUrl = if (RcloneEngine.isLocalStorageModeEnabled(context)) file.path
+                        else runCatching { RcloneEngine.buildStreamUrl(context, file.path) }.getOrNull() ?: return@launch
+                        val tags = com.vidlab.app.data.prefs.MediaSpecsCache.probeContainerMetadata(targetUrl)
+                        if (tags.isNotEmpty()) com.vidlab.app.data.prefs.MediaSpecsCache.mergeAndSaveTags(context, file.path, tags)
                     } finally {
                         semaphore.release()
                     }

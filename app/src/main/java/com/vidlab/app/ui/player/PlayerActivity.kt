@@ -534,6 +534,18 @@ private fun ModernPlayerScreen(
 
             override fun onTracksChanged(tracks: Tracks) {
                 refreshTracks(tracks)
+                for (group in tracks.groups) {
+                    if (group.type == C.TRACK_TYPE_VIDEO) {
+                        for (i in 0 until group.length) {
+                            val fmt = group.getTrackFormat(i)
+                            if (fmt.width > 0 || fmt.height > 0 || !fmt.sampleMimeType.isNullOrBlank()) {
+                                com.vidlab.app.data.prefs.MediaSpecsCache.recordFromPlaybackTracks(
+                                    context, activeFilePath, fmt.width, fmt.height, fmt.sampleMimeType, fmt.codecs
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {

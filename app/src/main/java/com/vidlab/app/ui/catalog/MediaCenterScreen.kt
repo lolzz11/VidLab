@@ -562,54 +562,7 @@ fun MediaCenterScreen(
     var sortOption by remember { mutableStateOf(filterPrefs.getString("sort_option", "Default") ?: "Default") }
     var selectedQuality by remember { mutableStateOf(filterPrefs.getString("selected_quality", "All") ?: "All") }
     var watchStatusFilter by remember { mutableStateOf(filterPrefs.getString("watch_status_filter", "All") ?: "All") }
-    var probeRevision by remember { mutableIntStateOf(0) }
-    LaunchedEffect(sections) {
-        val allItems = sections.flatMap { it.items }.distinctBy { it.id }
-        val sampleFiles = allItems.flatMap { item ->
-            if (item.isSeries) item.seasons.flatMap { it.episodes }.map { it.file }.take(2)
-            else listOf(item.primaryFile)
-        }
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val prefs = context.getSharedPreferences("vidlab_media_specs_cache", android.content.Context.MODE_PRIVATE)
-            var updatedAny = false
-            for (f in sampleFiles) {
-                if (prefs.contains(f.path)) continue
-                val urlStr = runCatching { com.vidlab.app.data.remote.RcloneEngine.buildStreamUrl(context, f.path) }.getOrNull() ?: continue
-                val tags = runCatching {
-                    val conn = (java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection).apply {
-                        connectTimeout = 3000; readTimeout = 3000
-                        setRequestProperty("Range", "bytes=0-65535")
-                    }
-                    val bytes = conn.inputStream.use { inp ->
-                        val buf = java.io.ByteArrayOutputStream(); val tmp = ByteArray(8192); var tot = 0
-                        while (tot < 65536) { val r = inp.read(tmp); if (r <= 0) break; buf.write(tmp, 0, r); tot += r }
-                        buf.toByteArray()
-                    }
-                    val out = mutableListOf<String>()
-                    val ascii = String(bytes, Charsets.ISO_8859_1)
-                    var maxW = 0; var maxH = 0
-                    for (i in 0 until bytes.size - 4) {
-                        val b0 = bytes[i].toInt() and 0xFF; val b1 = bytes[i + 1].toInt() and 0xFF
-                        if (b0 == 0xB0 && (b1 == 0x82 || b1 == 0x81)) {
-                            val v = if (b1 == 0x82) ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF) else (bytes[i + 2].toInt() and 0xFF)
-                            if (v in 320..8192) maxW = maxOf(maxW, v)
-                        } else if (b0 == 0xBA && (b1 == 0x82 || b1 == 0x81)) {
-                            val v = if (b1 == 0x82) ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF) else (bytes[i + 2].toInt() and 0xFF)
-                            if (v in 240..4320) maxH = maxOf(maxH, v)
-                        }
-                    }
-                    when { maxW >= 3600 || maxH >= 2000 -> out.add("4K"); maxW >= 1800 || maxH >= 1000 -> out.add("1080p"); maxW >= 1200 || maxH >= 700 -> out.add("720p") }
-                    when { ascii.contains("V_MPEGH/ISO/HEVC") || ascii.contains("hvc1") || ascii.contains("hev1") -> out.add("HEVC"); ascii.contains("V_AV1") || ascii.contains("av01") -> out.add("AV1"); ascii.contains("V_MPEG4/ISO/AVC") || ascii.contains("avc1") -> out.add("AVC") }
-                    out.distinct()
-                }.getOrDefault(emptyList())
-                if (tags.isNotEmpty()) {
-                    prefs.edit().putString(f.path, tags.joinToString("|")).apply()
-                    updatedAny = true
-                }
-            }
-            if (updatedAny) probeRevision++
-        }
-    }
+    val probeRevision = com.vidlab.app.data.prefs.MediaSpecsCache.revision.intValue
     val cachedProbeSpecs = remember(sections, probeRevision) {
         val prefs = context.getSharedPreferences("vidlab_media_specs_cache", android.content.Context.MODE_PRIVATE)
         prefs.all.mapValues { (_, v) -> (v as? String).orEmpty().uppercase() }

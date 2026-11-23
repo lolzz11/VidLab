@@ -78,6 +78,7 @@ fun StartupGuideDialog(
     var storageGranted by remember { mutableStateOf(hasAllFilesPermission(context)) }
     var notifGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
     var cloudflareDns by remember { mutableStateOf(playerPrefs.cloudflareDnsEnabled) }
+    var autoProbeSpecs by remember { mutableStateOf(playerPrefs.autoProbeMediaSpecs) }
     var selectedMode by remember { mutableStateOf(RcloneEngine.getSourceMode(context)) }
     var showMissingConfChoice by remember { mutableStateOf(false) }
     var showPasteConfDialog by remember { mutableStateOf(false) }
@@ -425,7 +426,30 @@ fun StartupGuideDialog(
                     }
 
                     Text(
-                        "3. CHOOSE LIBRARY SOURCE & TIPS",
+                        "3. QUALITY BADGES & MOBILE DATA SAVER",
+                        color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+                    )
+                    Surface(
+                        color = DrawerSurfaceDark,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(0.8.dp, if (autoProbeSpecs) Color(0xFFF59E0B) else DrawerBorderPurple)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Auto-Probe Remote Video Headers (Uses Extra Data)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                "Off by default to save cellular data. VidLab already detects 4K/1080p/HEVC badges from filenames (preserved after renaming) and automatically when you play a video. Turn on only if you want VidLab to read remote headers during scan — consumes extra mobile data.",
+                                color = Color(0xFFCBD5E1), fontSize = 11.sp, lineHeight = 15.sp
+                            )
+                            DrawerToggleRow(
+                                title = "Probe Video Headers on Cloud Scan",
+                                subtitle = "Warning: Consumes extra internet data on first scan",
+                                checked = autoProbeSpecs
+                            ) { autoProbeSpecs = it; playerPrefs.autoProbeMediaSpecs = it }
+                        }
+                    }
+
+                    Text(
+                        "4. CHOOSE LIBRARY SOURCE & TIPS",
                         color = Color(0xFF94A3B8),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,

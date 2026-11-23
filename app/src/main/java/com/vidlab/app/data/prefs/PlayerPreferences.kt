@@ -73,6 +73,10 @@ class PlayerPreferences(context: Context) {
         get() = prefs.getBoolean("auto_delete_after_watch", false)
         set(value) = prefs.edit().putBoolean("auto_delete_after_watch", value).apply()
 
+    var autoProbeMediaSpecs: Boolean
+        get() = prefs.getBoolean("auto_probe_media_specs", false)
+        set(value) = prefs.edit().putBoolean("auto_probe_media_specs", value).apply()
+
     init {
         if (!prefs.getBoolean("cloudflare_dns_migrated_v121", false)) {
             prefs.edit()

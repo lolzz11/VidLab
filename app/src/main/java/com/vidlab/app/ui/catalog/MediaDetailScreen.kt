@@ -397,29 +397,26 @@ fun MediaDetailScreen(
                             val sizeGb = String.format("%.2f GB", item.primaryFile.size / 1024.0 / 1024.0 / 1024.0)
                             MetaBadge(text = "Movie • $sizeGb")
                         }
-                        val qualityTags = remember(primaryTargetFile.name, primaryTargetFile.path, item.primaryFile.path, allEpisodes) {
+                        val specsRev = com.vidlab.app.data.prefs.MediaSpecsCache.revision.intValue
+                        val qualityTags = remember(primaryTargetFile.name, primaryTargetFile.path, item.primaryFile.path, allEpisodes, specsRev) {
+                            val cachedTarget = com.vidlab.app.data.prefs.MediaSpecsCache.getTags(context, primaryTargetFile.path)
+                            val cachedPrimary = com.vidlab.app.data.prefs.MediaSpecsCache.getTags(context, item.primaryFile.path)
+                            val cachedFirstEp = allEpisodes.firstOrNull()?.file?.path?.let {
+                                com.vidlab.app.data.prefs.MediaSpecsCache.getTags(context, it)
+                            }.orEmpty()
                             val firstEpName = allEpisodes.firstOrNull()?.file?.name ?: ""
-                            val n = "${primaryTargetFile.name} ${primaryTargetFile.path} ${item.primaryFile.path} $firstEpName"
-                            buildList {
-                                when {
-                                    Regex("""(?i)(?<!\d)(2160p?|4k|uhd)(?!\d)""").containsMatchIn(n) -> add("4K")
-                                    Regex("""(?i)(?<!\d)1080p?(?!\d)""").containsMatchIn(n) -> add("1080p")
-                                    Regex("""(?i)(?<!\d)720p?(?!\d)""").containsMatchIn(n) -> add("720p")
-                                    Regex("""(?i)(?<!\d)480p?(?!\d)""").containsMatchIn(n) -> add("480p")
-                                }
-                                when {
-                                    Regex("""(?i)(?<![a-z0-9])(hevc|x265|h\.?265)(?![a-z0-9])""").containsMatchIn(n) -> add("HEVC")
-                                    Regex("""(?i)(?<![a-z0-9])av1(?![a-z0-9])""").containsMatchIn(n) -> add("AV1")
-                                    Regex("""(?i)(?<![a-z0-9])(avc|x264|h\.?264)(?![a-z0-9])""").containsMatchIn(n) -> add("AVC")
-                                }
-                                when {
-                                    Regex("""(?i)(?<![a-z0-9])(remux)(?![a-z0-9])""").containsMatchIn(n) -> add("REMUX")
-                                    Regex("""(?i)(?<![a-z0-9])(blu[\s._-]?ray|bdrip|brrip)(?![a-z0-9])""").containsMatchIn(n) -> add("BluRay")
-                                    Regex("""(?i)(?<![a-z0-9])(web[\s._-]?dl|webrip)(?![a-z0-9])""").containsMatchIn(n) -> add("WEB-DL")
-                                }
-                                if (Regex("""(?i)(?<![a-z0-9])(hdr10\+?|hdr|dolby[\s._-]?vision|dv)(?![a-z0-9])""").containsMatchIn(n)) add("HDR")
-                                if (Regex("""(?i)(?<![a-z0-9])(10[\s._-]?bit|hi10p)(?![a-z0-9])""").containsMatchIn(n)) add("10-bit")
+                            val fromNames = com.vidlab.app.data.prefs.MediaSpecsCache.extractTagsFromText(
+                                "${primaryTargetFile.name} ${primaryTargetFile.path} ${item.primaryFile.path} $firstEpName"
+                            )
+                            val all = (cachedTarget + cachedPrimary + cachedFirstEp + fromNames).distinct()
+                            val bestRes = listOf("4K", "1080p", "720p", "480p").firstOrNull { r -> all.any { it.equals(r, ignoreCase = true) } }
+                            val bestCodec = listOf("HEVC", "AV1", "AVC").firstOrNull { c -> all.any { it.equals(c, ignoreCase = true) } }
+                            val bestSrc = listOf("REMUX", "BluRay", "WEB-DL").firstOrNull { s -> all.any { it.equals(s, ignoreCase = true) } }
+                            val extras = all.filter { t ->
+                                listOf("4K", "1080p", "720p", "480p", "HEVC", "AV1", "AVC", "REMUX", "BluRay", "WEB-DL")
+                                    .none { it.equals(t, ignoreCase = true) }
                             }
+                            listOfNotNull(bestRes, bestCodec, bestSrc) + extras
                         }
                         qualityTags.forEach { tag -> MetaBadge(text = tag) }
                         }

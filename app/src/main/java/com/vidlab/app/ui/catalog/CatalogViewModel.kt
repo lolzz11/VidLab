@@ -158,7 +158,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
             for (op in ops) {
                 if (op.oldPath != op.newPath) {
                     val res = if (RcloneEngine.isRcloneModeEnabled(app)) RcloneEngine.moveFile(app, op.oldPath, op.newPath) else repository.webDavClient.moveFile(op.oldPath, op.newPath)
-                    if (res.isFailure) failed++
+                    if (res.isSuccess) com.vidlab.app.data.prefs.MediaSpecsCache.migrateOnRename(app, op.oldPath, op.newPath) else failed++
                 }
             }
             val singleSrcDirs = ops.filter { it.oldPath != it.newPath }.map { "/" + it.oldPath.trim('/').substringBeforeLast('/', "") }
@@ -232,6 +232,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
             }
 
             if (moveRes.isSuccess) {
+                com.vidlab.app.data.prefs.MediaSpecsCache.migrateOnRename(app, qItem.file.path, destPath)
                 val srcParent = "/" + qItem.file.path.trim('/').substringBeforeLast('/', "")
                 RcloneEngine.pruneEmptyDirectories(app, listOf(srcParent))
                 _progressState.update { st ->
@@ -430,6 +431,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                             }
 
                             val logLine = if (moveResult.isSuccess) {
+                                com.vidlab.app.data.prefs.MediaSpecsCache.migrateOnRename(app, file.path, destPath)
                                 movedAtomic.incrementAndGet()
                                 val destParent = "/" + destPath.trim('/').substringBeforeLast('/', "")
                                 val targetDedupeRoot = if (destParent.substringAfterLast('/').startsWith("Season ", ignoreCase = true)) {

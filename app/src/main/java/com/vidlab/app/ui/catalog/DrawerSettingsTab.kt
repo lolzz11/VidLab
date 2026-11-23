@@ -45,6 +45,7 @@ internal fun DrawerSettingsTab(onSimklToggle: (Boolean) -> Unit, onOpenSetupGuid
     var autoSkip by remember { mutableStateOf(playerPrefs.autoSkipSegments) }
     var autoDeleteWatched by remember { mutableStateOf(playerPrefs.autoDeleteAfterWatch) }
     var cloudflareDns by remember { mutableStateOf(playerPrefs.cloudflareDnsEnabled) }
+    var autoProbeSpecs by remember { mutableStateOf(playerPrefs.autoProbeMediaSpecs) }
     var subSize by remember { mutableFloatStateOf(playerPrefs.subtitleFontSizeSp) }
     var subColorIdx by remember { mutableIntStateOf(playerPrefs.subtitleColorIndex) }
     var subBottomPct by remember { mutableIntStateOf(playerPrefs.subtitleBottomPaddingPct) }
@@ -55,6 +56,7 @@ internal fun DrawerSettingsTab(onSimklToggle: (Boolean) -> Unit, onOpenSetupGuid
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             when (key) {
                 "cloudflare_dns_enabled" -> cloudflareDns = playerPrefs.cloudflareDnsEnabled
+                "auto_probe_media_specs" -> autoProbeSpecs = playerPrefs.autoProbeMediaSpecs
                 "decoder_mode" -> decoderMode = playerPrefs.decoderMode
                 "subtitle_font_size_sp" -> subSize = playerPrefs.subtitleFontSizeSp
                 "subtitle_bottom_padding_pct" -> subBottomPct = playerPrefs.subtitleBottomPaddingPct
@@ -77,6 +79,10 @@ internal fun DrawerSettingsTab(onSimklToggle: (Boolean) -> Unit, onOpenSetupGuid
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             DrawerToggleRow("Cloudflare DNS (1.1.1.1)", "Route DNS queries through 1.1.1.1 to bypass ISP blocking.", cloudflareDns) {
                 cloudflareDns = it; playerPrefs.cloudflareDnsEnabled = it
+            }
+            HorizontalDivider(color = DrawerBorderPurple.copy(alpha = 0.6f))
+            DrawerToggleRow("Auto-Probe Video Headers", "Read remote headers on scan for 4K/1080p/HEVC badges (Warning: consumes extra mobile data).", autoProbeSpecs) {
+                autoProbeSpecs = it; playerPrefs.autoProbeMediaSpecs = it
             }
             OutlinedButton(onClick = onOpenSetupGuide, border = BorderStroke(1.dp, DrawerBorderPurple), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth().height(36.dp)) { Text("Setup & ISP Unblock Guide", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
         }
@@ -185,7 +191,7 @@ internal fun DrawerSettingsTab(onSimklToggle: (Boolean) -> Unit, onOpenSetupGuid
             subColorIdx = 0; playerPrefs.subtitleColorIndex = 0; subBottomPct = 5; playerPrefs.subtitleBottomPaddingPct = 5
             subBgBox = false; playerPrefs.subtitleBgBox = false; skipEnabled = true; playerPrefs.skipSegmentsEnabled = true
             autoSkip = false; playerPrefs.autoSkipSegments = false; autoDeleteWatched = false; playerPrefs.autoDeleteAfterWatch = false
-            cloudflareDns = false; playerPrefs.cloudflareDnsEnabled = false
+            cloudflareDns = false; playerPrefs.cloudflareDnsEnabled = false; autoProbeSpecs = false; playerPrefs.autoProbeMediaSpecs = false
             Toast.makeText(context, "Settings reset to default", Toast.LENGTH_SHORT).show()
         },
         border = BorderStroke(1.dp, DrawerBorderPurple), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().height(42.dp)
