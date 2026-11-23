@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -41,6 +42,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.vidlab.app.data.prefs.PlayerPreferences
 import com.vidlab.app.data.remote.DownloadTaskManager
 import com.vidlab.app.data.remote.RcloneEngine
+import com.vidlab.app.data.remote.RcloneRemoteConfig
 
 private fun hasAllFilesPermission(context: Context): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -77,6 +79,34 @@ fun StartupGuideDialog(
     var notifGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
     var cloudflareDns by remember { mutableStateOf(playerPrefs.cloudflareDnsEnabled) }
     var selectedMode by remember { mutableStateOf(RcloneEngine.getSourceMode(context)) }
+    var showMissingConfChoice by remember { mutableStateOf(false) }
+    var showPasteConfDialog by remember { mutableStateOf(false) }
+    var pendingSelectRemotes by remember { mutableStateOf<List<RcloneRemoteConfig>?>(null) }
+
+    fun finishRcloneSetup() {
+        RcloneEngine.setSourceMode(context, "rclone")
+        RcloneEngine.startForegroundServeService(context)
+        RcloneEngine.restartServeIfNeeded(context)
+        onModeApplied("rclone")
+    }
+
+    val pickConfLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val content = runCatching {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+            if (content != null) {
+                RcloneEngine.importConfigText(context, content).onSuccess { list ->
+                    showMissingConfChoice = false
+                    pendingSelectRemotes = list
+                }.onFailure { err ->
+                    Toast.makeText(context, "Import failed: ${err.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -94,6 +124,83 @@ fun StartupGuideDialog(
     ) {
         storageGranted = hasAllFilesPermission(context)
         notifGranted = hasNotificationPermission(context)
+    }
+
+    if (showMissingConfChoice) {
+        AlertDialog(
+            onDismissRequest = { showMissingConfChoice = false },
+            containerColor = DrawerSurfaceDark,
+            title = {
+                Text(
+                    "Rclone Config Required",
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    "No rclone.conf found yet. Import your rclone.conf file or paste its contents to connect your cloud remotes.",
+                    color = Color(0xFFCBD5E1),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showMissingConfChoice = false
+                        pickConfLauncher.launch(arrayOf("*/*"))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DrawerAccentViolet),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Import File", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(onClick = { showMissingConfChoice = false }) {
+                        Text("Cancel", color = Color(0xFF94A3B8))
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showMissingConfChoice = false
+                            showPasteConfDialog = true
+                        },
+                        border = BorderStroke(1.dp, DrawerBorderPurple),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Paste Text", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        )
+    }
+
+    if (showPasteConfDialog) {
+        PasteRcloneConfDialog(
+            initialText = "",
+            onDismiss = { showPasteConfDialog = false },
+            onSaved = { list ->
+                showPasteConfDialog = false
+                pendingSelectRemotes = list
+            }
+        )
+    }
+
+    pendingSelectRemotes?.let { list ->
+        SelectRemotesDialog(
+            initialRemotes = list,
+            onDismiss = {
+                pendingSelectRemotes = null
+                finishRcloneSetup()
+            },
+            onConfirm = {
+                pendingSelectRemotes = null
+                finishRcloneSetup()
+            }
+        )
     }
 
     Dialog(
@@ -366,6 +473,10 @@ fun StartupGuideDialog(
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = {
+                        if (selectedMode == "rclone" && !RcloneEngine.hasValidConfig(context)) {
+                            showMissingConfChoice = true
+                            return@Button
+                        }
                         RcloneEngine.setSourceMode(context, selectedMode)
                         if (selectedMode == "rclone") {
                             RcloneEngine.startForegroundServeService(context)

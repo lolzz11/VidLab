@@ -136,10 +136,12 @@ class MainActivity : ComponentActivity() {
 
             if (showLaunchModePicker) {
                 StartupGuideDialog(
-                    onModeApplied = {
+                    onModeApplied = { mode ->
                         launchModePrefs.edit().putBoolean("source_mode_chosen", true).apply()
                         showLaunchModePicker = false
-                        viewModel.loadMediaCenter(force = true)
+                        if (mode != "rclone" || com.vidlab.app.data.remote.RcloneEngine.hasValidConfig(this@MainActivity)) {
+                            viewModel.loadMediaCenter(force = true)
+                        }
                     },
                     onDismiss = {
                         launchModePrefs.edit().putBoolean("source_mode_chosen", true).apply()
