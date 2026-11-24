@@ -288,8 +288,13 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                 return@launch
             }
 
+            val organizedCats = setOf("movies", "shows", "tv shows", "anime", "kdrama", "documentaries", "animation")
+            val messyTagRegex = Regex("(?i)(\\[[^\\]]+\\]|\\b(?:1080p|720p|480p|2160p|4k|uhd|web-?dl|webrip|bluray|bdrip|x264|x265|hevc|remux|10bit)\\b)")
             val inboxFiles = allFiles.filterNot { f ->
-                f.path.trim('/').split('/').any { seg -> seg.equals("VidLab", ignoreCase = true) }
+                val segs = f.path.trim('/').split('/')
+                val inRootVault = segs.firstOrNull()?.equals("VidLab", ignoreCase = true) == true
+                val inCategorySubdir = segs.size >= 4 && segs.getOrNull(1)?.lowercase() in organizedCats
+                inRootVault && inCategorySubdir && !messyTagRegex.containsMatchIn(f.name)
             }
 
             if (inboxFiles.isEmpty()) {
@@ -347,10 +352,19 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                         try {
                             val parsed = FilenameSanitizer.parse(file.name, forceMovie = false)
                             var queryTitle = parsed.cleanTitle
+                            var effectiveYear = parsed.year
+                            val skipDirs = setOf("vidlab", "vidlab_test", "download", "downloads", "movies", "shows", "tv shows", "tv", "anime", "kdrama", "documentaries", "animation", "videos", "media")
+                            val seasonDir = Regex("(?i)^(?:season|s)\\s*0*\\d{1,2}$")
                             if (queryTitle.length <= 2) {
-                                val parentFolder = file.path.trim('/').split('/').dropLast(1).lastOrNull().orEmpty()
-                                val parentParsed = FilenameSanitizer.parse(parentFolder, forceMovie = false)
-                                if (parentParsed.cleanTitle.length > 2) queryTitle = parentParsed.cleanTitle
+                                for (seg in file.path.trim('/').split('/').dropLast(1).reversed()) {
+                                    if (seg.lowercase() in skipDirs || seasonDir.matches(seg.trim())) continue
+                                    val pp = FilenameSanitizer.parse(seg, forceMovie = false)
+                                    if (pp.cleanTitle.length > 2) {
+                                        queryTitle = pp.cleanTitle
+                                        if (effectiveYear == null) effectiveYear = pp.year
+                                        break
+                                    }
+                                }
                             }
                             queryTitle = queryTitle.replace(Regex("(?i)(tv|movie)\\d{4}"), "").trim()
 
@@ -370,11 +384,11 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                                 return@async
                             }
 
-                            val cacheKey = "${queryTitle.lowercase()}|$hintedSeries|${parsed.year.orEmpty()}"
+                            val cacheKey = "${queryTitle.lowercase()}|$hintedSeries|${effectiveYear.orEmpty()}"
                             val matchRes = scrapeCache.computeIfAbsent(cacheKey) {
                                 async {
                                     runCatching {
-                                        repository.scraper.scrapeWithVerification(queryTitle, hintedSeries, null, if (hintedSeries) "tv" else "movie", parsed.year)
+                                        repository.scraper.scrapeWithVerification(queryTitle, hintedSeries, null, if (hintedSeries) "tv" else "movie", effectiveYear)
                                     }.getOrDefault(MatchResult.NoMatch)
                                 }
                             }.await()
@@ -388,7 +402,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
 
                             val meta = confident.metadata
                             val cleanOfficialTitle = meta.title.replace(Regex("[/\\\\?%*:|\"<>+=]"), "").trim()
-                            val year = meta.releaseYear ?: parsed.year
+                            val year = meta.releaseYear ?: effectiveYear
                             val yearSuffix = if (!year.isNullOrBlank() && !cleanOfficialTitle.endsWith("($year)")) " ($year)" else ""
                             val ext = file.name.substringAfterLast('.', "mkv").ifBlank { "mkv" }
 

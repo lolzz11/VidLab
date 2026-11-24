@@ -123,9 +123,10 @@ class MediaCatalogRepository(
                 item.isSeries && hasKnownMeta -> buckets["TV Shows"]!!.add(item)
                 else -> {
                     val parentSegs = item.primaryFile.path.trim('/').split('/').dropLast(1)
-                    val genericSegs = setOf("vidlab", "0", "emulated", "storage", "sdcard", "download", "downloads", "media", "videos")
+                    val genericSegs = setOf("vidlab", "0", "emulated", "storage", "sdcard", "download", "downloads", "media", "videos", "vidlab_test")
+                    val seasonSeg = Regex("(?i)^(?:season|s)\\s*0*\\d{1,2}$")
                     val folderLabel = parentSegs.lastOrNull { seg ->
-                        seg.isNotBlank() && seg.lowercase() !in genericSegs && !seg.endsWith(":")
+                        seg.isNotBlank() && seg.lowercase() !in genericSegs && !seg.endsWith(":") && !seasonSeg.matches(seg.trim())
                     }?.replace('_', ' ')?.trim()?.ifBlank { null } ?: "Others"
                     buckets.getOrPut(folderLabel) { mutableListOf() }.add(item)
                 }
@@ -173,7 +174,7 @@ class MediaCatalogRepository(
         runCatching {
             val proj = arrayOf(android.provider.MediaStore.Video.Media.DATA)
             val sel = if (scanMode == "full") null else "${android.provider.MediaStore.Video.Media.DATA} LIKE ?"
-            val args = if (scanMode == "full") null else arrayOf("%/VidLab/%")
+            val args = if (scanMode == "full") null else arrayOf("${vidLabRoot.absolutePath}/%")
             context.contentResolver.query(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, proj, sel, args, null)?.use { c ->
                 val idx = c.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media.DATA)
                 while (c.moveToNext()) { c.getString(idx)?.let { addLocalFile(File(it)) } }
@@ -221,10 +222,8 @@ class MediaCatalogRepository(
         }
     }
 
-    private fun isInsideVidLabVault(path: String): Boolean {
-        val segs = path.trim('/').split('/')
-        return segs.any { it.equals("VidLab", ignoreCase = true) }
-    }
+    private fun isInsideVidLabVault(path: String): Boolean =
+        path.trimStart('/').startsWith("VidLab/", ignoreCase = true)
 
     private fun buildInstantSkeletonItems(files: List<MediaFile>, cachedById: Map<String, ScrapedMediaItem>): List<ScrapedMediaItem> {
         val seasonFolderCheck = Regex("""(?i)^(?:season|s)\s*0*\d{1,2}$""")
@@ -239,8 +238,8 @@ class MediaCatalogRepository(
             if (inMovies || (!parsed.isSeries && !inSeries)) {
                 movies.add(file)
             } else {
-                val key = parsed.seriesKey.takeIf { parsed.cleanTitle.length > 2 && it !in ignoredCategoryFolders }
-                    ?: parentDirs.reversed().map { FilenameSanitizer.parse(it) }.firstOrNull { it.cleanTitle.length > 2 && it.seriesKey !in ignoredCategoryFolders && !it.cleanTitle.startsWith("Season", true) }?.seriesKey
+                val key = parsed.seriesKey.takeIf { parsed.cleanTitle.length > 2 && it !in ignoredCategoryFolders && !seasonFolderCheck.matches(parsed.cleanTitle.trim()) }
+                    ?: parentDirs.reversed().filterNot { seasonFolderCheck.matches(it.trim()) }.map { FilenameSanitizer.parse(it) }.firstOrNull { it.cleanTitle.length > 2 && it.seriesKey !in ignoredCategoryFolders && !it.cleanTitle.startsWith("Season", true) }?.seriesKey
                 if (key != null) seriesBuckets.getOrPut(key) { mutableListOf() }.add(file) else movies.add(file)
             }
         }
@@ -336,6 +335,7 @@ class MediaCatalogRepository(
 
             if (detectedKey == null) {
                 for (seg in parentDirs.reversed()) {
+                    if (seasonFolderCheck.matches(seg.trim())) continue
                     val p = FilenameSanitizer.parse(seg, forceMovie = false)
                     if (p.cleanTitle.length > 2 && p.seriesKey !in ignoredCategoryFolders && !p.cleanTitle.startsWith("Season", ignoreCase = true)) {
                         detectedKey = p.seriesKey
@@ -357,15 +357,18 @@ class MediaCatalogRepository(
                 val sampleFile = fileList.first()
                 val sampleParsed = FilenameSanitizer.parse(sampleFile.name, forceMovie = false)
 
+                var folderYearFallback: String? = sampleParsed.year
                 var cleanShowName = if (sampleParsed.cleanTitle.length > 2) {
                     sampleParsed.cleanTitle
                 } else {
                     val parts = sampleFile.path.trim('/').split('/')
                     var folderFallback = sampleFile.name.substringBeforeLast('.')
                     for (seg in parts.reversed().drop(1)) {
+                        if (seasonFolderRegex.matches(seg.trim())) continue
                         val p = FilenameSanitizer.parse(seg)
                         if (p.cleanTitle.length > 2 && p.seriesKey !in ignoredCategoryFolders && !p.cleanTitle.startsWith("Season", ignoreCase = true)) {
                             folderFallback = p.cleanTitle
+                            if (folderYearFallback == null) folderYearFallback = p.year
                             break
                         }
                     }
@@ -376,7 +379,7 @@ class MediaCatalogRepository(
 
                 val binding = manualBindings[key]
                 val forcedType = binding?.mediaType ?: "tv"
-                val forcedYear = binding?.year
+                val forcedYear = binding?.year ?: folderYearFallback
                 val forcedPoster = binding?.posterUrl
                 val forcedId = binding?.tmdbId
                 if (binding != null) {
