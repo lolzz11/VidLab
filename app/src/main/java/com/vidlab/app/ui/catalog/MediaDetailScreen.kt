@@ -4,6 +4,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -95,6 +98,7 @@ fun MediaDetailScreen(
     val selectedEpisodePaths = remember { mutableStateListOf<String>() }
     var actionTargetFile by remember { mutableStateOf<MediaFile?>(null) }
     var episodeToDelete by remember { mutableStateOf<MediaFile?>(null) }
+    var showBatchLocalDeleteConfirm by remember { mutableStateOf(false) }
     var selectedCastMember by remember { mutableStateOf<CastMember?>(null) }
 
     val launchExternal: (MediaFile) -> Unit = { file ->
@@ -817,82 +821,123 @@ fun MediaDetailScreen(
                     item(key = "multi_select_bar") {
                         Surface(
                             color = SurfaceDark,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(14.dp),
                             border = BorderStroke(1.dp, AccentViolet),
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text("${selectedEpisodePaths.size} selected", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                TextButton(onClick = {
+                            Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("${selectedEpisodePaths.size} selected", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, modifier = Modifier.weight(1f))
                                     val seasonPaths = currentSeason.episodes.map { it.file.path }
-                                    if (seasonPaths.all { it in selectedEpisodePaths }) selectedEpisodePaths.removeAll(seasonPaths)
-                                    else seasonPaths.forEach { if (it !in selectedEpisodePaths) selectedEpisodePaths.add(it) }
-                                }) { Text("Select All", color = AccentViolet, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
-                                Button(
-                                    onClick = {
-                                        val picked = allEpisodes.filter { it.file.path in selectedEpisodePaths }.map { it.file }
-                                        if (picked.isNotEmpty()) {
-                                            DownloadTaskManager.enqueueBatch(context, picked, item.title, saveInApp = false)
-                                            Toast.makeText(context, "Downloading ${picked.size} episode(s)", Toast.LENGTH_SHORT).show()
-                                        }
-                                        selectedEpisodePaths.clear()
-                                        selectionMode = false
-                                    },
-                                    enabled = selectedEpisodePaths.isNotEmpty(),
-                                    colors = ButtonDefaults.buttonColors(containerColor = AccentViolet),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Icon(Icons.Default.Download, contentDescription = null, tint = Color(0xFF0A0E17), modifier = Modifier.size(15.dp))
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text("Download", color = Color(0xFF0A0E17), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                                Button(
-                                    onClick = {
-                                        val picked = allEpisodes.filter { it.file.path in selectedEpisodePaths }.map { it.file }
-                                        if (picked.isNotEmpty()) {
-                                            DownloadTaskManager.enqueueBatch(context, picked, item.title, saveInApp = true)
-                                            Toast.makeText(context, "Saving ${picked.size} episode(s) offline", Toast.LENGTH_SHORT).show()
-                                        }
-                                        selectedEpisodePaths.clear()
-                                        selectionMode = false
-                                    },
-                                    enabled = selectedEpisodePaths.isNotEmpty(),
-                                    colors = ButtonDefaults.buttonColors(containerColor = AccentViolet),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Icon(Icons.Default.Download, contentDescription = null, tint = Color(0xFF0A0E17), modifier = Modifier.size(15.dp))
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text("Offline", color = Color(0xFF0A0E17), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                                val selectedHasOffline = selectedEpisodePaths.any { p -> DownloadTaskManager.findDownloadedFile(context, p) != null }
-                                if (selectedHasOffline) {
-                                    OutlinedButton(
+                                    val allSel = seasonPaths.isNotEmpty() && seasonPaths.all { it in selectedEpisodePaths }
+                                    Surface(
                                         onClick = {
-                                            var removed = 0
-                                            selectedEpisodePaths.forEach { p ->
-                                                if (DownloadTaskManager.deleteDownloadedFile(context, p)) removed++
-                                            }
-                                            Toast.makeText(context, "Deleted $removed offline file(s)", Toast.LENGTH_SHORT).show()
-                                            selectedEpisodePaths.clear()
-                                            selectionMode = false
+                                            if (allSel) selectedEpisodePaths.removeAll(seasonPaths)
+                                            else seasonPaths.forEach { if (it !in selectedEpisodePaths) selectedEpisodePaths.add(it) }
                                         },
-                                        border = BorderStroke(1.dp, Color(0xFFEF5350)),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                                        shape = RoundedCornerShape(8.dp)
+                                        color = DeepPurpleBg, shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, BorderPurple)
                                     ) {
-                                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFEF5350), modifier = Modifier.size(15.dp))
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text("Delete", color = Color(0xFFEF5350), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text(if (allSel) "Clear All" else "Select All", color = Color(0xFF93C5FD), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    IconButton(onClick = { selectedEpisodePaths.clear(); selectionMode = false }, modifier = Modifier.size(32.dp)) {
+                                        Icon(Icons.Default.Close, "Close", tint = Color(0xFF94A3B8), modifier = Modifier.size(18.dp))
                                     }
                                 }
-                                IconButton(onClick = { selectedEpisodePaths.clear(); selectionMode = false }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.Close, contentDescription = "Cancel", tint = Color(0xFF94A3B8), modifier = Modifier.size(18.dp))
+                                @OptIn(ExperimentalLayoutApi::class)
+                                FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = {
+                                            val c = selectedEpisodePaths.size
+                                            selectedEpisodePaths.forEach { progressStore.markWatched(it, true) }
+                                            Toast.makeText(context, "Marked $c episode(s) watched", Toast.LENGTH_SHORT).show()
+                                            selectedEpisodePaths.clear(); selectionMode = false
+                                        },
+                                        enabled = selectedEpisodePaths.isNotEmpty(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF153B2E)),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4ADE80), modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text("Watched", color = Color(0xFF4ADE80), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            val c = selectedEpisodePaths.size
+                                            selectedEpisodePaths.forEach { progressStore.markWatched(it, false) }
+                                            Toast.makeText(context, "Marked $c episode(s) unwatched", Toast.LENGTH_SHORT).show()
+                                            selectedEpisodePaths.clear(); selectionMode = false
+                                        },
+                                        enabled = selectedEpisodePaths.isNotEmpty(),
+                                        border = BorderStroke(1.dp, BorderPurple),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.RestartAlt, null, tint = Color(0xFFCBD5E1), modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text("Unwatched", color = Color(0xFFCBD5E1), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+                                    }
+                                    if (!isLocalMode) {
+                                        Button(
+                                            onClick = {
+                                                val picked = allEpisodes.filter { it.file.path in selectedEpisodePaths }.map { it.file }
+                                                if (picked.isNotEmpty()) {
+                                                    DownloadTaskManager.enqueueBatch(context, picked, item.title, saveInApp = false)
+                                                    Toast.makeText(context, "Downloading ${picked.size} episode(s)", Toast.LENGTH_SHORT).show()
+                                                }
+                                                selectedEpisodePaths.clear(); selectionMode = false
+                                            },
+                                            enabled = selectedEpisodePaths.isNotEmpty(),
+                                            colors = ButtonDefaults.buttonColors(containerColor = AccentViolet),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Icon(Icons.Default.Download, null, tint = Color.White, modifier = Modifier.size(15.dp))
+                                            Spacer(modifier = Modifier.width(5.dp))
+                                            Text("Download", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+                                        }
+                                        Button(
+                                            onClick = {
+                                                val picked = allEpisodes.filter { it.file.path in selectedEpisodePaths }.map { it.file }
+                                                if (picked.isNotEmpty()) {
+                                                    DownloadTaskManager.enqueueBatch(context, picked, item.title, saveInApp = true)
+                                                    Toast.makeText(context, "Saving ${picked.size} episode(s) offline", Toast.LENGTH_SHORT).show()
+                                                }
+                                                selectedEpisodePaths.clear(); selectionMode = false
+                                            },
+                                            enabled = selectedEpisodePaths.isNotEmpty(),
+                                            colors = ButtonDefaults.buttonColors(containerColor = AccentViolet),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Icon(Icons.Default.OfflinePin, null, tint = Color.White, modifier = Modifier.size(15.dp))
+                                            Spacer(modifier = Modifier.width(5.dp))
+                                            Text("Offline", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+                                        }
+                                    }
+                                    val canDel = if (isLocalMode) selectedEpisodePaths.isNotEmpty() else selectedEpisodePaths.any { DownloadTaskManager.findDownloadedFile(context, it) != null }
+                                    if (canDel) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                if (isLocalMode) showBatchLocalDeleteConfirm = true
+                                                else {
+                                                    var removed = 0
+                                                    selectedEpisodePaths.forEach { if (DownloadTaskManager.deleteDownloadedFile(context, it)) removed++ }
+                                                    offlineRefreshTick++
+                                                    Toast.makeText(context, "Deleted $removed offline file(s)", Toast.LENGTH_SHORT).show()
+                                                    selectedEpisodePaths.clear(); selectionMode = false
+                                                }
+                                            },
+                                            border = BorderStroke(1.dp, Color(0xFFEF5350)),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Icon(Icons.Default.Delete, null, tint = Color(0xFFEF5350), modifier = Modifier.size(15.dp))
+                                            Spacer(modifier = Modifier.width(5.dp))
+                                            Text("Delete", color = Color(0xFFEF5350), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1082,13 +1127,48 @@ fun MediaDetailScreen(
             )
         }
 
+        if (showBatchLocalDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showBatchLocalDeleteConfirm = false },
+                containerColor = SurfaceDark,
+                title = { Text("Delete Selected Episodes?", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                text = { Text("Permanently delete ${selectedEpisodePaths.size} selected episode file(s) from local storage?", color = Color(0xFFCBD5E1), fontSize = 13.sp) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showBatchLocalDeleteConfirm = false
+                        var deleted = 0
+                        selectedEpisodePaths.toList().forEach { if (java.io.File(it).delete()) deleted++ }
+                        selectedEpisodePaths.clear(); selectionMode = false
+                        Toast.makeText(context, "Deleted $deleted episode(s)", Toast.LENGTH_SHORT).show()
+                        onBackClick()
+                    }) { Text("Delete", color = Color(0xFFEF5350), fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = { TextButton(onClick = { showBatchLocalDeleteConfirm = false }) { Text("Cancel", color = Color(0xFF94A3B8)) } }
+            )
+        }
+
         actionTargetFile?.let { targetFile ->
+            val isWatched = progressStore.getProgress(targetFile.path)?.watched == true
             AlertDialog(
                 onDismissRequest = { actionTargetFile = null },
                 containerColor = SurfaceDark,
                 title = { Text(targetFile.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(
+                            onClick = {
+                                val next = !isWatched
+                                progressStore.markWatched(targetFile.path, next)
+                                Toast.makeText(context, if (next) "Marked as watched" else "Marked as unwatched", Toast.LENGTH_SHORT).show()
+                                actionTargetFile = null
+                            },
+                            color = DeepPurpleBg, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, BorderPurple), modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Icon(if (isWatched) Icons.Default.RestartAlt else Icons.Default.CheckCircle, null, tint = if (isWatched) Color(0xFFCBD5E1) else Color(0xFF4ADE80), modifier = Modifier.size(20.dp))
+                                Text(if (isWatched) "Mark as Unwatched" else "Mark as Watched", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
                         Surface(
                             onClick = {
                                 selectionMode = true
@@ -1098,27 +1178,25 @@ fun MediaDetailScreen(
                             color = DeepPurpleBg, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, BorderPurple), modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Icon(Icons.Default.SelectAll, contentDescription = null, tint = AccentViolet, modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.SelectAll, null, tint = AccentViolet, modifier = Modifier.size(20.dp))
                                 Text("Select Episodes", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                             }
                         }
-                        Surface(
-                            onClick = {
-                                DownloadTaskManager.enqueueFile(context, targetFile, item.title, saveInApp = false)
-                                Toast.makeText(context, "Downloading to Downloads/VidLab", Toast.LENGTH_SHORT).show()
-                                actionTargetFile = null
-                            },
-                            color = DeepPurpleBg, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, BorderPurple), modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Icon(Icons.Default.Download, contentDescription = null, tint = AccentViolet, modifier = Modifier.size(20.dp))
-                                Column {
+                        if (!isLocalMode) {
+                            Surface(
+                                onClick = {
+                                    DownloadTaskManager.enqueueFile(context, targetFile, item.title, saveInApp = false)
+                                    Toast.makeText(context, "Downloading to Downloads/VidLab", Toast.LENGTH_SHORT).show()
+                                    actionTargetFile = null
+                                },
+                                color = DeepPurpleBg, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, BorderPurple), modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Icon(Icons.Default.Download, null, tint = AccentViolet, modifier = Modifier.size(20.dp))
                                     Text("Download Episode", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                    Text("Save to public Downloads/VidLab folder", color = Color(0xFF94A3B8), fontSize = 11.sp)
                                 }
                             }
                         }
-
                     }
                 },
                 confirmButton = { TextButton(onClick = { actionTargetFile = null }) { Text("Cancel", color = Color(0xFF94A3B8)) } }
@@ -1338,28 +1416,50 @@ private fun EpisodeCard(
         label = "episodeSwipe"
     )
     val animatedOffsetX = if (isDragging) rawDragX else snapBackX
+    val haptic = LocalHapticFeedback.current
+    var cardWidthPx by remember { mutableFloatStateOf(0f) }
+    var crossed by remember { mutableStateOf(false) }
+    val thresholdPx = if (cardWidthPx > 0f) (cardWidthPx * 0.25f).coerceAtLeast(180f) else 220f
+    val maxPx = if (cardWidthPx > 0f) (cardWidthPx * 0.58f).coerceAtLeast(420f) else 520f
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 6.dp)
+            .onSizeChanged { cardWidthPx = it.width.toFloat() }
+            .draggable(
+                orientation = Orientation.Horizontal,
+                enabled = !selectionMode,
+                onDragStarted = { isDragging = true; crossed = false },
+                state = rememberDraggableState { delta ->
+                    val next = (rawDragX + delta).coerceIn(-maxPx, maxPx)
+                    rawDragX = next
+                    val now = kotlin.math.abs(next) >= thresholdPx
+                    if (now && !crossed) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    crossed = now
+                },
+                onDragStopped = {
+                    isDragging = false
+                    if (rawDragX >= thresholdPx) onSetWatched(true)
+                    else if (rawDragX <= -thresholdPx) onSetWatched(false)
+                    rawDragX = 0f
+                    crossed = false
+                }
+            )
     ) {
         if (kotlin.math.abs(animatedOffsetX) > 4f) {
             val isRight = animatedOffsetX > 0f
+            val ready = kotlin.math.abs(animatedOffsetX) >= thresholdPx
             Row(
                 modifier = Modifier
                     .matchParentSize()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (isRight) Color(0xFF153B2E) else Color(0xFF282032))
-                    .padding(horizontal = 18.dp),
+                    .background(if (isRight) (if (ready) Color(0xFF166534) else Color(0xFF153B2E)) else (if (ready) Color(0xFF334155) else Color(0xFF282032)))
+                    .padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = if (isRight) Arrangement.Start else Arrangement.End
             ) {
-                Text(
-                    text = if (isRight) "✓ Mark Watched" else "↺ Mark Unwatched",
-                    color = if (isRight) Color(0xFF4ADE80) else Color(0xFFCBD5E1),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Text(if (isRight) "✓ Mark Watched" else "↺ Mark Unwatched", color = if (isRight) Color(0xFF4ADE80) else Color(0xFFE2E8F0), fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
         Surface(
@@ -1369,20 +1469,6 @@ private fun EpisodeCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .graphicsLayer { translationX = animatedOffsetX }
-                .draggable(
-                    orientation = Orientation.Horizontal,
-                    enabled = !selectionMode,
-                    onDragStarted = { isDragging = true },
-                    state = rememberDraggableState { delta ->
-                        rawDragX = (rawDragX + delta).coerceIn(-160f, 160f)
-                    },
-                    onDragStopped = {
-                        isDragging = false
-                        if (rawDragX > 80f) onSetWatched(true)
-                        else if (rawDragX < -80f) onSetWatched(false)
-                        rawDragX = 0f
-                    }
-                )
                 .clip(RoundedCornerShape(12.dp))
                 .combinedClickable(onClick = onPlayClick, onLongClick = onLongClick)
         ) {
