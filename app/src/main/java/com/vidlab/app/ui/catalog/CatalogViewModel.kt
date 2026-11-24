@@ -96,7 +96,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
         return !hasMessyTags && !hasDotRelease
     }
 
-    private fun runBatchOrganizer(vaultOnly: Boolean) {
+    fun triggerLibraryBatchRename() {
         runBatchOrganizer(vaultOnly = false)
     }
 
@@ -290,7 +290,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun triggerLibraryBatchRename() {
+    private fun runBatchOrganizer(vaultOnly: Boolean) {
         val app = getApplication<Application>()
         if (_progressState.value.isRunning) return
 
