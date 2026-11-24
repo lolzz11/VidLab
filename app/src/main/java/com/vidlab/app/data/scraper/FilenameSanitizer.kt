@@ -138,7 +138,7 @@ object FilenameSanitizer {
                             episode = epVal
                             text = trailingEp.groupValues[1].trim()
                         }
-                    }                    }
+                    }
                 }
             }
         }
