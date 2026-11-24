@@ -39,7 +39,7 @@ fun RenamePreviewBottomSheet(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null, tint = Color(0xFF244985))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Permanent WebDAV Rename", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Permanent Storage Rename", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -50,30 +50,54 @@ fun RenamePreviewBottomSheet(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 350.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(operations) { op ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF1B162B))
-                            .padding(10.dp)
-                    ) {
-                        Text(op.fileName, color = Color(0xFFE57373), fontSize = 11.sp, maxLines = 1)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 2.dp)
+            if (operations.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF1B162B))
+                        .padding(14.dp)
+                ) {
+                    Text(
+                        "Already Matched & Organized",
+                        color = Color(0xFF81C784),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "This file already has the exact filename and folder structure for this match. No file move is needed.",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 350.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(operations) { op ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF1B162B))
+                                .padding(10.dp)
                         ) {
-                            Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF244985), modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(op.newFileName, color = Color(0xFF81C784), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(op.fileName, color = Color(0xFFE57373), fontSize = 11.sp, maxLines = 1)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            ) {
+                                Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF244985), modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(op.newFileName, color = Color(0xFF81C784), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            }
+                            Text("-> ${op.newPath}", color = Color(0xFF756E8A), fontSize = 10.sp, maxLines = 1)
                         }
-                        Text("➔ ${op.newPath}", color = Color(0xFF756E8A), fontSize = 10.sp, maxLines = 1)
                     }
                 }
             }
@@ -81,18 +105,25 @@ fun RenamePreviewBottomSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
-                onClick = onConfirm,
-                enabled = !isRenaming && operations.isNotEmpty(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF244985)),
+                onClick = { if (operations.isEmpty()) onDismiss() else onConfirm() },
+                enabled = !isRenaming,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (operations.isEmpty()) Color(0xFF262038) else Color(0xFF244985)
+                ),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
             ) {
                 if (isRenaming) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
-                    Text("Apply Permanent Changes", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (operations.isEmpty()) "Close" else "Apply Permanent Changes",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
+
             Spacer(modifier = Modifier.height(8.dp))
         }
     }

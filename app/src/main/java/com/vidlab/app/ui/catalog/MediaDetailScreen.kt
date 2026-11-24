@@ -216,7 +216,7 @@ fun MediaDetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(350.dp)
+                        .height(if (heroImg.isNullOrBlank()) 210.dp else 350.dp)
                 ) {
                     if (!heroImg.isNullOrBlank()) {
                         val heroReq = remember(heroImg) {
@@ -233,6 +233,25 @@ fun MediaDetailScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(Color(0xFF1E1B4B), Color(0xFF0F172A))
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "NO ARTWORK AVAILABLE",
+                                color = Color.White.copy(alpha = 0.28f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 1.5.sp
+                            )
+                        }
                     }
 
                     Box(
