@@ -109,7 +109,7 @@ object FilenameSanitizer {
                 isSeries = true
                 episode = standaloneEpBeforeStrip.groupValues[1].toIntOrNull()
                 val cutIdx = standaloneEpBeforeStrip.range.first.coerceAtMost(text.length)
-                if (cutIdx > 0) text = text.substring(0, cutIdx)
+                text = text.substring(0, cutIdx)
             } else if (animeDashOrBracketEp != null) {
                 isSeries = true
                 episode = animeDashOrBracketEp.groupValues[1].toIntOrNull()
@@ -122,15 +122,23 @@ object FilenameSanitizer {
                     episode = explicitEp.groupValues[1].toIntOrNull()
                     text = text.substring(0, explicitEp.range.first)
                 } else {
+                    val bareNumEp = Regex("^0*(\\d{1,3})(?:\\s*v\\d+)?$", RegexOption.IGNORE_CASE).find(text.trim())
                     val trailingEp = Regex("^(.{3,}?)\\s+0*(\\d{1,3})(?:\\s+v\\d+)?$", RegexOption.IGNORE_CASE).find(text.trim())
-                    if (trailingEp != null) {
+                    if (bareNumEp != null) {
+                        val epVal = bareNumEp.groupValues[1].toIntOrNull()
+                        if (epVal != null && epVal in 1..999) {
+                            isSeries = true
+                            episode = epVal
+                            text = ""
+                        }
+                    } else if (trailingEp != null) {
                         val epVal = trailingEp.groupValues[2].toIntOrNull()
                         if (epVal != null && epVal in 1..999 && trailingEp.groupValues[1].trim().length >= 3) {
                             isSeries = true
                             episode = epVal
                             text = trailingEp.groupValues[1].trim()
                         }
-                    }
+                    }                    }
                 }
             }
         }

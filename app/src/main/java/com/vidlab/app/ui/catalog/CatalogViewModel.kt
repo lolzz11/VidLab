@@ -154,6 +154,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
         val updatedItem = item.copy(
             title = candidate.title,
             releaseYear = candidate.year,
+            isSeries = candidate.mediaType.equals("tv", ignoreCase = true),
             posterUrl = candidate.posterUrl ?: item.posterUrl
         )
         _singleRenamePlan.value = repository.generateRenamePlan(
@@ -190,7 +191,11 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
             var failed = 0
             for (op in ops) {
                 if (op.oldPath != op.newPath) {
-                    val res = if (RcloneEngine.isRcloneModeEnabled(app)) RcloneEngine.moveFile(app, op.oldPath, op.newPath) else repository.webDavClient.moveFile(op.oldPath, op.newPath)
+                    val res = when {
+                        RcloneEngine.isLocalStorageModeEnabled(app) -> RcloneEngine.moveLocalFile(app, op.oldPath, op.newPath)
+                        RcloneEngine.isRcloneModeEnabled(app) -> RcloneEngine.moveFile(app, op.oldPath, op.newPath)
+                        else -> repository.webDavClient.moveFile(op.oldPath, op.newPath)
+                    }
                     if (res.isSuccess) com.vidlab.app.data.prefs.MediaSpecsCache.migrateOnRename(app, op.oldPath, op.newPath) else failed++
                 }
             }
