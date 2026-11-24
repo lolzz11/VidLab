@@ -619,6 +619,11 @@ class MediaCatalogRepository(
         isManualOverride: Boolean = false,
         overrideCategory: String? = null
     ): List<RenameOperation> {
+        val knownRemotes = if (RcloneEngine.isRcloneModeEnabled(context)) {
+            RcloneEngine.getConfiguredRemotes(context).map { it.name }.toSet()
+        } else emptySet()
+        val firstSeg = item.primaryFile.path.trim('/').substringBefore('/')
+        val remotePrefix = if (firstSeg in knownRemotes) "/$firstSeg" else "" 
         val plan = mutableListOf<RenameOperation>()
         val plannedTargets = mutableSetOf<String>()
         if (item.metadata == null && !isManualOverride) return emptyList()
@@ -663,7 +668,7 @@ class MediaCatalogRepository(
                         String.format("%s - S%02dE%02d - %s.%s", cleanTitle, season.seasonNumber, ep.episodeNumber, epTitleClean, ext)
                     }
 
-                    val newFullPath = "/VidLab/$vaultCategory/$showFolder/$seasonFolderName/$newFileName"
+                    val newFullPath = "$remotePrefix/VidLab/$vaultCategory/$showFolder/$seasonFolderName/$newFileName"
                     if (oldPath != newFullPath && plannedTargets.add(newFullPath.lowercase())) {
                         plan.add(RenameOperation(oldPath, newFullPath, ep.file.name, newFileName))
                     }
@@ -675,7 +680,7 @@ class MediaCatalogRepository(
             val movieFolderName = "$cleanTitle$yearSuffix"
             val newFileName = "$cleanTitle$yearSuffix.$ext"
 
-            val newFullPath = "/VidLab/$vaultCategory/$movieFolderName/$newFileName"
+            val newFullPath = "$remotePrefix/VidLab/$vaultCategory/$movieFolderName/$newFileName"
             if (oldPath != newFullPath) {
                 plan.add(RenameOperation(oldPath, newFullPath, item.primaryFile.name, newFileName))
             }
