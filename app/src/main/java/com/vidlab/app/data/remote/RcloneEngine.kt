@@ -191,9 +191,10 @@ object RcloneEngine {
 
     suspend fun pruneEmptyDirectories(context: Context, dirPaths: Collection<String>) = withContext(Dispatchers.IO) {
         if (dirPaths.isEmpty()) return@withContext
+        val protectedNames = setOf("vidlab", "movies", "shows", "tv shows", "anime", "kdrama", "documentaries", "animation")
         val sortedDirs = dirPaths
             .map { "/" + it.trim('/') }
-            .filter { it.length > 1 && !it.equals("/VidLab", ignoreCase = true) && !it.startsWith("/VidLab/", ignoreCase = true) }
+            .filter { it.length > 1 && it.substringAfterLast('/').lowercase() !in protectedNames }
             .distinct()
             .sortedByDescending { it.length }
 
@@ -202,7 +203,7 @@ object RcloneEngine {
             for (d in sortedDirs) {
                 var cur: File? = File(extRoot, d.trimStart('/'))
                 while (cur != null && cur.absolutePath.startsWith(extRoot.absolutePath) && cur != extRoot) {
-                    if (cur.name.equals("VidLab", ignoreCase = true)) break
+                    if (cur.name.lowercase() in protectedNames) break
                     val children = cur.listFiles()
                     if (children != null && children.isEmpty()) {
                         cur.delete()
@@ -219,7 +220,7 @@ object RcloneEngine {
             val runtimeConf = getRuntimeServeConfigFile(context)
             for (d in sortedDirs) {
                 var cur = d
-                while (cur.length > 1 && !cur.equals("/VidLab", ignoreCase = true)) {
+                while (cur.length > 1 && cur.substringAfterLast('/').lowercase() !in protectedNames) {
                     val spec = resolveRemoteSpec(context, cur)
                     val pb = ProcessBuilder(listOf(bin.absolutePath, "rmdir", spec, "--config", runtimeConf.absolutePath)).redirectErrorStream(true)
                     pb.environment()["SSL_CERT_DIR"] = "/system/etc/security/cacerts"

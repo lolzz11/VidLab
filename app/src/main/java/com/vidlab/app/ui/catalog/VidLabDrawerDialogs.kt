@@ -222,6 +222,53 @@ internal fun RenamerConfirmDialog(
 }
 
 @Composable
+internal fun FixVidLabFolderConfirmDialog(
+    sourceMode: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val modeLabel = when (sourceMode) {
+        "rclone" -> "Rclone Remotes"
+        "webdav" -> "WebDAV Server"
+        else -> "Local Storage"
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DrawerSurfaceDark,
+        title = {
+            Text(
+                "Fix / Clean Up VidLab Folder?",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                "Target: /VidLab folder on $modeLabel\n\n" +
+                    "• Audits every movie, show, and anime inside /VidLab/ using the updated parser & TMDB metadata.\n" +
+                    "• Fixes misnamed titles/years, loose files, and messy release tags into canonical folders.\n" +
+                    "• Removes empty leftover folders inside /VidLab/ after moving.\n" +
+                    "• Preserves your manual matches.",
+                color = Color(0xFFCBD5E1),
+                fontSize = 12.sp,
+                lineHeight = 17.sp
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Fix VidLab Folder", color = Color(0xFF60A5FA), fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = Color(0xFF94A3B8))
+            }
+        }
+    )
+}
+
+@Composable
 internal fun RemoveRcloneConfigDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit

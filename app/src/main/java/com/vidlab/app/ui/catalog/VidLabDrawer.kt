@@ -33,6 +33,7 @@ fun VidLabDrawerContent(
     onSimklToggle: (Boolean) -> Unit,
     onRescanClick: () -> Unit,
     onRunRenamerClick: () -> Unit,
+    onFixVidLabFolderClick: () -> Unit = {},
     onBrowseStorageClick: () -> Unit = {},
     onRecentClick: () -> Unit = {},
     onOpenFullDownloads: () -> Unit = {},
@@ -55,6 +56,7 @@ fun VidLabDrawerContent(
     var pasteConfText by remember { mutableStateOf("") }
     var drawerPendingSelectRemotes by remember { mutableStateOf<List<RcloneRemoteConfig>?>(null) }
     var showRenamerConfirmDialog by remember { mutableStateOf(false) }
+    var showFixVaultConfirmDialog by remember { mutableStateOf(false) }
 
     val downloadTasks = DownloadTaskManager.tasks
     val activeDownloadCount = downloadTasks.count { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED }
@@ -77,6 +79,13 @@ fun VidLabDrawerContent(
         RenamerConfirmDialog(
             onDismiss = { showRenamerConfirmDialog = false },
             onConfirm = { showRenamerConfirmDialog = false; onRunRenamerClick() }
+        )
+    }
+    if (showFixVaultConfirmDialog) {
+        FixVidLabFolderConfirmDialog(
+            sourceMode = sourceMode,
+            onDismiss = { showFixVaultConfirmDialog = false },
+            onConfirm = { showFixVaultConfirmDialog = false; onFixVidLabFolderClick() }
         )
     }
 
@@ -121,6 +130,7 @@ fun VidLabDrawerContent(
                         isOrganizerRunning = isOrganizerRunning,
                         organizerStatusLabel = organizerStatusLabel,
                         onShowRenamerConfirm = { showRenamerConfirmDialog = true },
+                        onShowFixVaultConfirm = { showFixVaultConfirmDialog = true },
                         onRescanClick = onRescanClick,
                         onRunRenamerClick = onRunRenamerClick,
                         onBrowseStorageClick = onBrowseStorageClick

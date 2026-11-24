@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -42,6 +43,7 @@ internal fun DrawerSourceTab(
     isOrganizerRunning: Boolean,
     organizerStatusLabel: String,
     onShowRenamerConfirm: () -> Unit,
+    onShowFixVaultConfirm: () -> Unit,
     onRescanClick: () -> Unit,
     onRunRenamerClick: () -> Unit,
     onBrowseStorageClick: () -> Unit
@@ -213,6 +215,17 @@ internal fun DrawerSourceTab(
                     val btnText = when { organizerStatusLabel.isNotBlank() -> organizerStatusLabel; sourceMode == "rclone" -> "Rclone Renamer"; sourceMode == "local" -> "Local Renamer"; else -> "WebDAV Renamer" }
                     Text(btnText, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+            }
+            OutlinedButton(
+                onClick = { if (isOrganizerRunning || organizerStatusLabel.isNotBlank()) onRunRenamerClick() else onShowFixVaultConfirm() },
+                border = BorderStroke(1.dp, DrawerBorderPurple),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().height(38.dp)
+            ) {
+                Icon(Icons.Default.Build, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(15.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Fix / Clean Up VidLab Folder", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
