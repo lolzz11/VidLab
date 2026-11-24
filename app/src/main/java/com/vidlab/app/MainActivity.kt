@@ -91,6 +91,8 @@ class MainActivity : ComponentActivity() {
             val singleRenamePlan by viewModel.singleRenamePlan.collectAsState()
             val isSingleRenaming by viewModel.isSingleRenaming.collectAsState()
             val searchResults by viewModel.searchResults.collectAsState()
+            val vaultAuditCandidates by viewModel.vaultAuditCandidates.collectAsState()
+            val vaultAuditVersion by viewModel.vaultAuditVersionLabel.collectAsState()
 
             var selectedItem by remember { mutableStateOf<ScrapedMediaItem?>(null) }
             var itemForOptions by remember { mutableStateOf<ScrapedMediaItem?>(null) }
@@ -142,10 +144,89 @@ class MainActivity : ComponentActivity() {
                         if (mode != "rclone" || com.vidlab.app.data.remote.RcloneEngine.hasValidConfig(this@MainActivity)) {
                             viewModel.loadMediaCenter(force = true)
                         }
+                        viewModel.checkVaultUpdateAudit()
                     },
                     onDismiss = {
                         launchModePrefs.edit().putBoolean("source_mode_chosen", true).apply()
                         showLaunchModePicker = false
+                        viewModel.checkVaultUpdateAudit()
+                    }
+                )
+            }
+
+            if (!showLaunchModePicker && vaultAuditCandidates.isNotEmpty()) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { viewModel.dismissVaultAudit() },
+                    containerColor = Color(0xFF0D1015),
+                    title = {
+                        Text(
+                            "Clean Up VidLab Folder? (v$vaultAuditVersion)",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "Found ${vaultAuditCandidates.size} file(s) in your /VidLab folder that can be better organized with the updated parser:",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 12.sp
+                            )
+                            Surface(
+                                color = Color(0xFF131824),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    vaultAuditCandidates.take(3).forEach { file ->
+                                        Text(
+                                            "• ${file.name}",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    if (vaultAuditCandidates.size > 3) {
+                                        Text(
+                                            "+ ${vaultAuditCandidates.size - 3} more...",
+                                            color = Color(0xFF94A3B8),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                "Manual matches and already-clean folders won't be touched.",
+                                color = Color(0xFF64748B),
+                                fontSize = 11.sp
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.Button(
+                            onClick = {
+                                viewModel.acceptVaultAuditFix()
+                                renamerInitialTab = 0
+                                showRenamerModal = true
+                            },
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF244985)
+                            )
+                        ) {
+                            Text("Fix Things", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = { viewModel.dismissVaultAudit() }
+                        ) {
+                            Text("Keep As Is", color = Color(0xFF94A3B8))
+                        }
                     }
                 )
             }

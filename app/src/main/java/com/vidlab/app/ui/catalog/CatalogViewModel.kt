@@ -67,8 +67,82 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
 
     val ambiguousPrompts: SharedFlow<AmbiguousPrompt> = repository.ambiguousMatchesFlow
 
+    private val _vaultAuditCandidates = MutableStateFlow<List<MediaFile>>(emptyList())
+    val vaultAuditCandidates: StateFlow<List<MediaFile>> = _vaultAuditCandidates.asStateFlow()
+
+    private val _vaultAuditVersionLabel = MutableStateFlow("1.3.6")
+    val vaultAuditVersionLabel: StateFlow<String> = _vaultAuditVersionLabel.asStateFlow()
+
+    private val vaultOrganizedCats = setOf("movies", "shows", "tv shows", "anime", "kdrama", "documentaries", "animation")
+    private val vaultMessyTagRegex = Regex("(?i)(\\[[^\\]]+\\]|\\b(?:1080p|720p|480p|2160p|4k|uhd|web-?dl|webrip|bluray|bdrip|x264|x265|hevc|remux|10bit)\\b)")
+    private val vaultDotReleaseRegex = Regex("[A-Za-z0-9]\\.[A-Za-z0-9]+\\.[A-Za-z0-9]")
+
     init {
         loadMediaCenter()
+        checkVaultUpdateAudit()
+    }
+
+    private fun isCleanlyOrganizedInVault(f: MediaFile): Boolean {
+        val segs = f.path.trim('/').split('/')
+        val inRootVault = segs.firstOrNull()?.equals("VidLab", ignoreCase = true) == true
+        val inCategorySubdir = segs.size >= 4 && segs.getOrNull(1)?.lowercase() in vaultOrganizedCats
+        if (!inRootVault || !inCategorySubdir) return false
+        val baseName = f.name.substringBeforeLast('.')
+        val parentFolder = segs.dropLast(1).lastOrNull().orEmpty()
+        val hasMessyTags = vaultMessyTagRegex.containsMatchIn(f.name) || vaultMessyTagRegex.containsMatchIn(parentFolder)
+        val hasDotRelease = (!baseName.contains(' ') && vaultDotReleaseRegex.containsMatchIn(baseName)) ||
+            (!parentFolder.contains(' ') && vaultDotReleaseRegex.containsMatchIn(parentFolder))
+        return !hasMessyTags && !hasDotRelease
+    }
+
+    private fun getCurrentAppVersionInfo(): Pair<Long, String> {
+        val app = getApplication<Application>()
+        return runCatching {
+            val pkg = app.packageManager.getPackageInfo(app.packageName, 0)
+            val code = if (android.os.Build.VERSION.SDK_INT >= 28) pkg.longVersionCode else @Suppress("DEPRECATION") pkg.versionCode.toLong()
+            code to (pkg.versionName ?: "1.3.6")
+        }.getOrElse { 20L to "1.3.6" }
+    }
+
+    fun checkVaultUpdateAudit() {
+        val app = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            val (currentVer, verName) = getCurrentAppVersionInfo()
+            _vaultAuditVersionLabel.value = verName
+            val prefs = app.getSharedPreferences("vidlab_vault_audit", android.content.Context.MODE_PRIVATE)
+            if (currentVer <= prefs.getLong("last_audited_version_code", 0L)) return@launch
+            if (!RcloneEngine.hasAnyConfiguredSource(app)) return@launch
+
+            val manualKeys = runCatching {
+                val f = java.io.File(app.filesDir, "manual_bindings_v5.json")
+                if (f.exists()) f.readText() else ""
+            }.getOrDefault("")
+
+            val messyVaultFiles = runCatching { repository.crawlAllStorageFiles() }.getOrDefault(emptyList()).filter { f ->
+                val inVault = f.path.trim('/').split('/').firstOrNull()?.equals("VidLab", ignoreCase = true) == true
+                if (!inVault || isCleanlyOrganizedInVault(f)) return@filter false
+                val parsedKey = FilenameSanitizer.parse(f.name, forceMovie = false).seriesKey
+                !(parsedKey.length > 2 && manualKeys.contains('"' + parsedKey + '"'))
+            }
+
+            if (messyVaultFiles.isEmpty()) {
+                prefs.edit().putLong("last_audited_version_code", currentVer).apply()
+            } else {
+                _vaultAuditCandidates.value = messyVaultFiles
+            }
+        }
+    }
+
+    fun dismissVaultAudit() {
+        val (currentVer, _) = getCurrentAppVersionInfo()
+        getApplication<Application>().getSharedPreferences("vidlab_vault_audit", android.content.Context.MODE_PRIVATE)
+            .edit().putLong("last_audited_version_code", currentVer).apply()
+        _vaultAuditCandidates.value = emptyList()
+    }
+
+    fun acceptVaultAuditFix() {
+        dismissVaultAudit()
+        triggerLibraryBatchRename()
     }
 
     fun loadMediaCenter(force: Boolean = false, onFinished: ((Int) -> Unit)? = null) {
@@ -288,14 +362,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                 return@launch
             }
 
-            val organizedCats = setOf("movies", "shows", "tv shows", "anime", "kdrama", "documentaries", "animation")
-            val messyTagRegex = Regex("(?i)(\\[[^\\]]+\\]|\\b(?:1080p|720p|480p|2160p|4k|uhd|web-?dl|webrip|bluray|bdrip|x264|x265|hevc|remux|10bit)\\b)")
-            val inboxFiles = allFiles.filterNot { f ->
-                val segs = f.path.trim('/').split('/')
-                val inRootVault = segs.firstOrNull()?.equals("VidLab", ignoreCase = true) == true
-                val inCategorySubdir = segs.size >= 4 && segs.getOrNull(1)?.lowercase() in organizedCats
-                inRootVault && inCategorySubdir && !messyTagRegex.containsMatchIn(f.name)
-            }
+            val inboxFiles = allFiles.filterNot { isCleanlyOrganizedInVault(it) }
 
             if (inboxFiles.isEmpty()) {
                 _progressState.update {
