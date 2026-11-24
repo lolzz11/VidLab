@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.OfflinePin
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material3.*
@@ -896,24 +895,6 @@ fun MediaDetailScreen(
                                             Icon(Icons.Default.Download, null, tint = Color.White, modifier = Modifier.size(15.dp))
                                             Spacer(modifier = Modifier.width(5.dp))
                                             Text("Download", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
-                                        }
-                                        Button(
-                                            onClick = {
-                                                val picked = allEpisodes.filter { it.file.path in selectedEpisodePaths }.map { it.file }
-                                                if (picked.isNotEmpty()) {
-                                                    DownloadTaskManager.enqueueBatch(context, picked, item.title, saveInApp = true)
-                                                    Toast.makeText(context, "Saving ${picked.size} episode(s) offline", Toast.LENGTH_SHORT).show()
-                                                }
-                                                selectedEpisodePaths.clear(); selectionMode = false
-                                            },
-                                            enabled = selectedEpisodePaths.isNotEmpty(),
-                                            colors = ButtonDefaults.buttonColors(containerColor = AccentViolet),
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Icon(Icons.Default.OfflinePin, null, tint = Color.White, modifier = Modifier.size(15.dp))
-                                            Spacer(modifier = Modifier.width(5.dp))
-                                            Text("Offline", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                                         }
                                     }
                                     val canDel = if (isLocalMode) selectedEpisodePaths.isNotEmpty() else selectedEpisodePaths.any { DownloadTaskManager.findDownloadedFile(context, it) != null }
