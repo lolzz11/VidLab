@@ -105,12 +105,14 @@ class MediaCatalogRepository(
             "Movies" to mutableListOf<ScrapedMediaItem>(),
             "KDrama" to mutableListOf<ScrapedMediaItem>(),
             "Documentaries" to mutableListOf<ScrapedMediaItem>(),
-            "Animation" to mutableListOf<ScrapedMediaItem>()
+            "Animation" to mutableListOf<ScrapedMediaItem>(),
+            "VidLab Unmatched" to mutableListOf<ScrapedMediaItem>()
         )
         for (item in scrapedItems) {
             val pathUpper = item.primaryFile.path.uppercase()
             val hasKnownMeta = item.metadata != null && (!item.metadata.posterUrl.isNullOrBlank() || !item.metadata.overview.isNullOrBlank() || !item.metadata.releaseYear.isNullOrBlank())
             when {
+                pathUpper.contains("/VIDLAB_UNMATCHED/") -> buckets["VidLab Unmatched"]!!.add(item)
                 pathUpper.contains("/VIDLAB/ANIME/") -> buckets["Anime"]!!.add(item)
                 pathUpper.contains("/VIDLAB/MOVIES/") -> buckets["Movies"]!!.add(item)
                 pathUpper.contains("/VIDLAB/SHOWS/") -> buckets["TV Shows"]!!.add(item)
@@ -144,8 +146,8 @@ class MediaCatalogRepository(
         val scanMode = context.getSharedPreferences("vidlab_offline_prefs", android.content.Context.MODE_PRIVATE)
             .getString("local_scan_mode", "full") ?: "full"
         val extRoot = android.os.Environment.getExternalStorageDirectory()
-        val scanRoot = if (scanMode == "full" && extRoot.exists()) extRoot else vidLabRoot
-        if (!scanRoot.exists()) return emptyList()
+        val unmatchedRoot = File(vidLabRoot.parentFile ?: extRoot, "VidLab_Unmatched")
+        val rootsToWalk = if (scanMode == "full" && extRoot.exists()) listOf(extRoot) else listOf(vidLabRoot, unmatchedRoot)
         val found = mutableListOf<MediaFile>()
         val seenPaths = mutableSetOf<String>()
         fun addLocalFile(file: File) {
@@ -153,6 +155,8 @@ class MediaCatalogRepository(
             if (file.extension.lowercase() !in localVideoExts) return
             val logicalPath = if (file.absolutePath.startsWith(vidLabRoot.absolutePath)) {
                 "/VidLab/" + file.relativeTo(vidLabRoot).path.replace('\\', '/')
+            } else if (file.absolutePath.startsWith(unmatchedRoot.absolutePath)) {
+                "/VidLab_Unmatched/" + file.relativeTo(unmatchedRoot).path.replace('\\', '/')
             } else if (file.absolutePath.startsWith(extRoot.absolutePath)) {
                 "/" + file.relativeTo(extRoot).path.replace('\\', '/')
             } else file.absolutePath
@@ -165,16 +169,19 @@ class MediaCatalogRepository(
             android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R ||
             android.os.Environment.isExternalStorageManager()
         if (canWalkFull) {
-            runCatching {
-                scanRoot.walkTopDown()
-                    .onEnter { dir -> !dir.name.startsWith(".") && dir.name.lowercase() !in skippedDirs && dir.canRead() }
-                    .forEach { f -> runCatching { addLocalFile(f) } }
+            for (r in rootsToWalk) {
+                if (!r.exists()) continue
+                runCatching {
+                    r.walkTopDown()
+                        .onEnter { dir -> !dir.name.startsWith(".") && dir.name.lowercase() !in skippedDirs && dir.canRead() }
+                        .forEach { f -> runCatching { addLocalFile(f) } }
+                }
             }
         }
         runCatching {
             val proj = arrayOf(android.provider.MediaStore.Video.Media.DATA)
-            val sel = if (scanMode == "full") null else "${android.provider.MediaStore.Video.Media.DATA} LIKE ?"
-            val args = if (scanMode == "full") null else arrayOf("${vidLabRoot.absolutePath}/%")
+            val sel = if (scanMode == "full") null else "(${android.provider.MediaStore.Video.Media.DATA} LIKE ? OR ${android.provider.MediaStore.Video.Media.DATA} LIKE ?)"
+            val args = if (scanMode == "full") null else arrayOf("${vidLabRoot.absolutePath}/%", "${unmatchedRoot.absolutePath}/%")
             context.contentResolver.query(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, proj, sel, args, null)?.use { c ->
                 val idx = c.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media.DATA)
                 while (c.moveToNext()) { c.getString(idx)?.let { addLocalFile(File(it)) } }

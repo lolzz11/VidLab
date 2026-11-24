@@ -241,6 +241,11 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
             val ext = qItem.file.name.substringAfterLast('.', "mkv").ifBlank { "mkv" }
             val yearSuffix = if (!chosenYear.isNullOrBlank()) " ($chosenYear)" else ""
             val isSeriesCat = chosenCategory != "Movies" && (qItem.isSeries || chosenCategory in listOf("Anime", "Shows", "KDrama"))
+            val knownRemotes = if (RcloneEngine.isRcloneModeEnabled(app)) {
+                RcloneEngine.getConfiguredRemotes(app).map { it.name }.toSet()
+            } else emptySet()
+            val firstSeg = qItem.file.path.trim('/').substringBefore('/')
+            val remotePrefix = if (firstSeg in knownRemotes) "/$firstSeg" else ""
 
             val destPath = if (isSeriesCat) {
                 val showFolder = "$cleanTitle$yearSuffix"
@@ -251,11 +256,11 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                 } else {
                     String.format("%s - S%02dE%02d.%s", cleanTitle, seasonNum.coerceAtLeast(1), episodeNum.coerceAtLeast(1), ext)
                 }
-                "/VidLab/$chosenCategory/$showFolder/$seasonFolder/$newFileName"
+                "$remotePrefix/VidLab/$chosenCategory/$showFolder/$seasonFolder/$newFileName"
             } else {
                 val movieFolder = "$cleanTitle$yearSuffix"
                 val newFileName = "$cleanTitle$yearSuffix.$ext"
-                "/VidLab/$chosenCategory/$movieFolder/$newFileName"
+                "$remotePrefix/VidLab/$chosenCategory/$movieFolder/$newFileName"
             }
 
             val moveRes = when {
@@ -337,7 +342,10 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                     !isManuallyBound
                 }
             } else {
-                allFiles.filterNot { isCleanlyOrganizedInVault(it) }
+                allFiles.filterNot { f ->
+                    val inUnmatched = f.path.trim('/').split('/').any { it.equals("VidLab_Unmatched", ignoreCase = true) }
+                    inUnmatched || isCleanlyOrganizedInVault(f)
+                }
             }
 
             if (inboxFiles.isEmpty()) {
@@ -345,8 +353,8 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                     it.copy(
                         isRunning = false,
                         isCompleted = true,
-                        currentStep = "All files are already inside /VidLab!",
-                        logs = it.logs + "✓ 0 unorganized files found outside /VidLab."
+                        currentStep = if (vaultOnly) "Everything inside /VidLab is already clean!" else "All files are already inside /VidLab!",
+                        logs = it.logs + (if (vaultOnly) "✓ 0 unorganized files found inside /VidLab." else "✓ 0 unorganized files found outside /VidLab.")
                     )
                 }
                 RenamerBackgroundService.stop(app, "All media is already organized in /VidLab")
@@ -358,7 +366,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                 it.copy(
                     totalCount = inboxFiles.size,
                     currentStep = "Matching metadata & organizing...",
-                    logs = it.logs + "Found ${inboxFiles.size} file(s) outside /VidLab to process..."
+                    logs = it.logs + (if (vaultOnly) "Found ${inboxFiles.size} file(s) inside /VidLab to audit..." else "Found ${inboxFiles.size} file(s) outside /VidLab to process...")
                 )
             }
 
@@ -386,6 +394,45 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                 _progressState.update {
                     it.copy(currentFile = fileName, processedCount = done, unmatchedItems = quarantine.toList(), logs = (listOf(logLine) + it.logs).take(120))
                 }
+            }
+
+            suspend fun handleUnmatchedFile(
+                file: MediaFile,
+                qTitle: String,
+                qYear: String?,
+                qIsSeries: Boolean,
+                qSeason: Int,
+                qEpisode: Int,
+                qCategory: String,
+                reason: String
+            ) {
+                var finalFile = file
+                var logPrefix = "⚠ Needs Input: ${file.name}"
+                if (vaultOnly) {
+                    val relInfo = extractVidLabRelSegments(file.path)
+                    if (relInfo != null) {
+                        val (prefix, afterVidLab) = relInfo
+                        val subRel = afterVidLab.joinToString("/").ifBlank { file.name }
+                        val unmatchedDest = "$prefix/VidLab_Unmatched/$subRel"
+                        val moveOut = when {
+                            RcloneEngine.isLocalStorageModeEnabled(app) -> RcloneEngine.moveLocalFile(app, file.path, unmatchedDest)
+                            RcloneEngine.isRcloneModeEnabled(app) -> RcloneEngine.moveFile(app, file.path, unmatchedDest)
+                            else -> repository.webDavClient.moveFile(file.path, unmatchedDest)
+                        }
+                        if (moveOut.isSuccess) {
+                            com.vidlab.app.data.prefs.MediaSpecsCache.migrateOnRename(app, file.path, unmatchedDest)
+                            finalFile = file.copy(path = unmatchedDest)
+                            val srcParent = "/" + file.path.trim('/').substringBeforeLast('/', "")
+                            val protectedVaultRoots = setOf("vidlab", "vidlab_unmatched", "movies", "shows", "tv shows", "anime", "kdrama", "documentaries", "animation")
+                            if (srcParent.length > 1 && srcParent.substringAfterLast('/').lowercase() !in protectedVaultRoots) {
+                                emptiedSourceFolders.add(srcParent)
+                            }
+                            logPrefix = "↷ Moved to /VidLab_Unmatched: ${file.name}"
+                        }
+                    }
+                }
+                quarantine.add(ManualQuarantineItem(finalFile, qTitle, qYear, qIsSeries, qSeason, qEpisode, qCategory, reason))
+                recordStep(file.name, "$logPrefix ($reason)")
             }
 
             kotlinx.coroutines.coroutineScope {
@@ -422,8 +469,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                             }
 
                             if (queryTitle.length < 2) {
-                                quarantine.add(ManualQuarantineItem(file, file.name.substringBeforeLast('.'), parsed.year, hintedSeries, parsed.season, parsed.episode ?: 1, suggestedCategory, "Unreadable filename — manual match required"))
-                                recordStep(file.name, "⚠ Needs Input: ${file.name} (unreadable title)")
+                                handleUnmatchedFile(file, file.name.substringBeforeLast('.'), parsed.year, hintedSeries, parsed.season, parsed.episode ?: 1, suggestedCategory, "unreadable title")
                                 return@async
                             }
 
@@ -438,8 +484,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
 
                             val confident = matchRes as? MatchResult.ConfidentMatch
                             if (confident == null) {
-                                quarantine.add(ManualQuarantineItem(file, queryTitle, parsed.year, hintedSeries, parsed.season, parsed.episode ?: 1, suggestedCategory, "No high-confidence database match"))
-                                recordStep(file.name, "⚠ Needs Input: ${file.name} (no confident match for \"$queryTitle\")")
+                                handleUnmatchedFile(file, queryTitle, parsed.year, hintedSeries, parsed.season, parsed.episode ?: 1, suggestedCategory, "no confident match for \"$queryTitle\"")
                                 return@async
                             }
 
@@ -467,8 +512,7 @@ class CatalogViewModel(application: Application) : AndroidViewModel(application)
                                 val sNum = parsed.season.coerceAtLeast(1)
                                 val epNum = parsed.episode
                                 if (epNum == null) {
-                                    quarantine.add(ManualQuarantineItem(file, cleanOfficialTitle, year, true, sNum, 1, finalCategory, "Missing episode number for series \"$cleanOfficialTitle\""))
-                                    recordStep(file.name, "⚠ Needs Input: ${file.name} (missing episode number)")
+                                    handleUnmatchedFile(file, cleanOfficialTitle, year, true, sNum, 1, finalCategory, "missing episode number")
                                     return@async
                                 }
                                 val scrapedEp = confident.episodes["S${sNum}E${epNum}"]
