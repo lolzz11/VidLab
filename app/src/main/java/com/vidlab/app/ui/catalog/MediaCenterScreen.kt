@@ -878,6 +878,51 @@ fun MediaCenterScreen(
             }
         }
 
+    longPressedCardItem?.let { cardItem ->
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val pStore = remember { com.vidlab.app.data.prefs.WatchProgressStore(ctx) }
+        val eps = remember(cardItem) { cardItem.seasons.flatMap { it.episodes } }
+        val isWatched = remember(cardItem, com.vidlab.app.data.prefs.WatchProgressStore.revision.value) {
+            if (cardItem.isSeries && eps.isNotEmpty()) eps.all { pStore.getProgress(it.file.path)?.watched == true }
+            else pStore.getProgress(cardItem.primaryFile.path)?.watched == true
+        }
+        AlertDialog(
+            onDismissRequest = { longPressedCardItem = null },
+            containerColor = SurfaceDark,
+            title = { Text(cardItem.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        onClick = {
+                            val next = !isWatched
+                            if (cardItem.isSeries && eps.isNotEmpty()) eps.forEach { pStore.markWatched(it.file.path, next) }
+                            else pStore.markWatched(cardItem.primaryFile.path, next)
+                            android.widget.Toast.makeText(ctx, if (next) "Marked ${cardItem.title} watched" else "Marked ${cardItem.title} unwatched", android.widget.Toast.LENGTH_SHORT).show()
+                            longPressedCardItem = null
+                        },
+                        color = DeepPurpleBg, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, BorderPurple), modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Icon(if (isWatched) Icons.Default.RestartAlt else Icons.Default.CheckCircle, null, tint = if (isWatched) Color(0xFFCBD5E1) else Color(0xFF4ADE80), modifier = Modifier.size(20.dp))
+                            Text(if (isWatched) "Mark as Unwatched" else "Mark as Watched", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    Surface(
+                        onClick = { val t = cardItem; longPressedCardItem = null; onRematchItem(t) },
+                        color = DeepPurpleBg, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, BorderPurple), modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Icon(Icons.Default.AutoFixHigh, null, tint = AccentViolet, modifier = Modifier.size(20.dp))
+                            Text("Fix Metadata Match", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { longPressedCardItem = null }) { Text("Cancel", color = Color(0xFF94A3B8)) } }
+        )
+    }
+
+
         if (sections.isEmpty() && !isSearchActive) {
             Column(
                 modifier = Modifier
@@ -1292,49 +1337,6 @@ fun MediaCenterScreen(
                 }
             }
         }
-    }
-    longPressedCardItem?.let { cardItem ->
-        val ctx = androidx.compose.ui.platform.LocalContext.current
-        val pStore = remember { com.vidlab.app.data.prefs.WatchProgressStore(ctx) }
-        val eps = remember(cardItem) { cardItem.seasons.flatMap { it.episodes } }
-        val isWatched = remember(cardItem, com.vidlab.app.data.prefs.WatchProgressStore.revision.value) {
-            if (cardItem.isSeries && eps.isNotEmpty()) eps.all { pStore.getProgress(it.file.path)?.watched == true }
-            else pStore.getProgress(cardItem.primaryFile.path)?.watched == true
-        }
-        AlertDialog(
-            onDismissRequest = { longPressedCardItem = null },
-            containerColor = SurfaceDark,
-            title = { Text(cardItem.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(
-                        onClick = {
-                            val next = !isWatched
-                            if (cardItem.isSeries && eps.isNotEmpty()) eps.forEach { pStore.markWatched(it.file.path, next) }
-                            else pStore.markWatched(cardItem.primaryFile.path, next)
-                            android.widget.Toast.makeText(ctx, if (next) "Marked ${cardItem.title} watched" else "Marked ${cardItem.title} unwatched", android.widget.Toast.LENGTH_SHORT).show()
-                            longPressedCardItem = null
-                        },
-                        color = DeepPurpleBg, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, BorderPurple), modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Icon(if (isWatched) Icons.Default.RestartAlt else Icons.Default.CheckCircle, null, tint = if (isWatched) Color(0xFFCBD5E1) else Color(0xFF4ADE80), modifier = Modifier.size(20.dp))
-                            Text(if (isWatched) "Mark as Unwatched" else "Mark as Watched", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                    Surface(
-                        onClick = { val t = cardItem; longPressedCardItem = null; onRematchItem(t) },
-                        color = DeepPurpleBg, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, BorderPurple), modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Icon(Icons.Default.AutoFixHigh, null, tint = AccentViolet, modifier = Modifier.size(20.dp))
-                            Text("Fix Metadata Match", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { longPressedCardItem = null }) { Text("Cancel", color = Color(0xFF94A3B8)) } }
-        )
     }
 
 }
