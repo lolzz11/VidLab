@@ -159,10 +159,16 @@ class MediaCatalogRepository(
                 found.add(MediaFile(name = file.name, path = logicalPath, size = file.length(), isDirectory = false))
             }
         }
-        runCatching {
-            scanRoot.walkTopDown()
-                .onEnter { dir -> !dir.name.startsWith(".") && !dir.name.equals("Android", ignoreCase = true) }
-                .forEach { f -> addLocalFile(f) }
+        val skippedDirs = setOf("android", "dcim", "pictures", "whatsapp", "recordings", "alarms", "notifications", "ringtones", "audiobooks", "music")
+        val canWalkFull = scanMode != "full" ||
+            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R ||
+            android.os.Environment.isExternalStorageManager()
+        if (canWalkFull) {
+            runCatching {
+                scanRoot.walkTopDown()
+                    .onEnter { dir -> !dir.name.startsWith(".") && dir.name.lowercase() !in skippedDirs && dir.canRead() }
+                    .forEach { f -> runCatching { addLocalFile(f) } }
+            }
         }
         runCatching {
             val proj = arrayOf(android.provider.MediaStore.Video.Media.DATA)
